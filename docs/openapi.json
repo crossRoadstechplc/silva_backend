@@ -1,0 +1,44 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "SPX Coffee Field OS API",
+    "version": "1.0.0",
+    "description": "Farm management ERP for Shecha Estate. Base path /api/v1."
+  },
+  "servers": [{ "url": "/api/v1" }],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer", "bearerFormat": "JWT" }
+    }
+  },
+  "security": [{ "bearerAuth": [] }],
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "security": [],
+        "summary": "Login",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "email": { "type": "string" }, "password": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Token bundle" }, "401": { "description": "UNAUTHENTICATED" } }
+      }
+    },
+    "/afp-lines": { "get": { "tags": ["AFP"], "summary": "List AFP lines" }, "post": { "tags": ["AFP"], "summary": "Create AFP line" } },
+    "/afes": { "get": { "tags": ["AFE"], "summary": "List AFEs" }, "post": { "tags": ["AFE"], "summary": "Create AFE" } },
+    "/work-orders": { "get": { "tags": ["Work Orders"], "summary": "List work orders" } },
+    "/field-tickets": { "get": { "tags": ["Field Tickets"], "summary": "List field tickets" } },
+    "/payment-requests": { "get": { "tags": ["Payment Requests"], "summary": "List payment requests" } },
+    "/owner-settlements": { "get": { "tags": ["Settlements"], "summary": "List settlements" } },
+    "/revenue-ledger": { "get": { "tags": ["Finance"], "summary": "SPX principal only" } },
+    "/dashboard/silva-owner": { "get": { "tags": ["Dashboard"], "summary": "Silva owner dashboard" } }
+  }
+}

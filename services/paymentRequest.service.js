@@ -1,0 +1,142 @@
+const prisma = require("../config/database");
+const AppError = require("../utils/AppError");
+const { nextTextId } = require("../utils/ids");
+const { decimal, parseListQuery, meta } = require("../utils/helpers");
+const { paymentRequestJson, auditJson } = require("../utils/serializers");
+const { isVendorRole, isSilvaRole } = require("../utils/roles");
+
+exports.findAll = async (query, user) => {
+  const { page, pageSize, skip, take, statuses } = parseListQuery(query);
+  const where = {};
+  if (isVendorRole(user.role)) where.requestedByUserId = user.id;
+  if (isSilvaRole(user.role)) where.status = { in: ["verified", "settled"] };
+  if (statuses.length && !isSilvaRole(user.role)) where.status = { in: statuses };
+  if (query.workOrderId) where.workOrderId = query.workOrderId;
+  if (query.type) where.type = query.type;
+  const [rows, total] = await Promise.all([
+    prisma.payment_requests.findMany({ where, skip, take, orderBy: { createdAt: "desc" } }),
+    prisma.payment_requests.count({ where }),
+  ]);
+  return { items: rows.map(paymentRequestJson), meta: meta(page, pageSize, total) };
+};
+
+exports.findOne = async (id, user) => {
+  const row = await prisma.payment_requests.findUnique({ where: { id } });
+  if (!row) throw new AppError(404, "NOT_FOUND", "Payment request not found.");
+  if (isVendorRole(user.role) && row.requestedByUserId !== user.id) {
+    throw new AppError(404, "NOT_FOUND", "Payment request not found.");
+  }
+  if (isSilvaRole(user.role) && !["verified", "settled"].includes(row.status)) {
+    throw new AppError(404, "NOT_FOUND", "Payment request not found.");
+  }
+  return paymentRequestJson(row);
+};
+
+exports.create = async (dto, user) => {
+  const ticket = await prisma.field_tickets.findUnique({ where: { id: dto.fieldTicketId } });
+  if (!ticket) throw new AppError(404, "NOT_FOUND", "Field ticket not found.");
+  if (!ticket.signedOff) {
+    throw new AppError(422, "BUSINESS_RULE_VIOLATION", "Payment Request requires a signed-off Field Ticket.");
+  }
+  const id = await nextTextId("pr", "PR");
+  const row = await prisma.payment_requests.create({
+    data: {
+      id,
+      workOrderId: dto.workOrderId,
+      fieldTicketId: dto.fieldTicketId,
+      requestedByUserId: user.id,
+      type: dto.type,
+      amountRequestedEtb: decimal(dto.amountRequestedEtb),
+    },
+  });
+  await prisma.field_tickets.update({ where: { id: ticket.id }, data: { paymentRequestId: row.id } });
+  return paymentRequestJson(row);
+};
+
+exports.update = async (id, dto, user) => {
+  const row = await prisma.payment_requests.findUnique({ where: { id } });
+  if (!row) throw new AppError(404, "NOT_FOUND", "Payment request not found.");
+  if (row.status !== "draft") throw new AppError(400, "INVALID_STATE", "Only draft records can be edited.");
+  const updated = await prisma.payment_requests.update({
+    where: { id },
+    data: {
+      type: dto.type ?? row.type,
+      amountRequestedEtb: dto.amountRequestedEtb !== undefined ? decimal(dto.amountRequestedEtb) : undefined,
+    },
+  });
+  return paymentRequestJson(updated);
+};
+
+exports.submit = async (id, user) => {
+  const row = await prisma.payment_requests.findUnique({ where: { id } });
+  if (!row) throw new AppError(404, "NOT_FOUND", "Payment request not found.");
+  if (row.status === "submitted") return paymentRequestJson(row);
+  if (row.status !== "draft") throw new AppError(400, "INVALID_STATE", "Workflow transition not allowed.");
+  return paymentRequestJson(
+    await prisma.payment_requests.update({
+      where: { id },
+      data: { status: "submitted", dateSubmitted: new Date() },
+    })
+  );
+};
+
+exports.verify = async (id, user) => {
+  const row = await prisma.payment_requests.findUnique({
+    where: { id },
+    include: { requestedBy: true },
+  });
+  if (!row) throw new AppError(404, "NOT_FOUND", "Payment request not found.");
+  if (row.status === "verified") return paymentRequestJson(row);
+  if (row.status !== "submitted") throw new AppError(400, "INVALID_STATE", "Workflow transition not allowed.");
+  if (row.requestedByUserId === user.id) {
+    throw new AppError(409, "MAKER_CHECKER_VIOLATION", "Actor cannot approve own submission.");
+  }
+  if (user.organizationType === row.requestedBy.organization?.type && user.organizationType !== "spx") {
+    throw new AppError(409, "MAKER_CHECKER_VIOLATION", "Verifier must be a different organization.");
+  }
+  if (user.organizationType !== "spx") {
+    throw new AppError(403, "FORBIDDEN", "Only SPX can verify payment requests.");
+  }
+  return paymentRequestJson(
+    await prisma.payment_requests.update({
+      where: { id },
+      data: {
+        status: "verified",
+        spxVerified: true,
+        spxVerifiedByUserId: user.id,
+        verifiedDate: new Date(),
+      },
+    })
+  );
+};
+
+exports.reject = async (id, reason, user) => {
+  const row = await prisma.payment_requests.findUnique({ where: { id } });
+  if (!row) throw new AppError(404, "NOT_FOUND", "Payment request not found.");
+  if (row.status === "rejected") return paymentRequestJson(row);
+  if (row.status !== "submitted") throw new AppError(400, "INVALID_STATE", "Workflow transition not allowed.");
+  return paymentRequestJson(await prisma.payment_requests.update({ where: { id }, data: { status: "rejected" } }));
+};
+
+exports.settle = async (id, settlementId, user) => {
+  const row = await prisma.payment_requests.findUnique({ where: { id } });
+  if (!row) throw new AppError(404, "NOT_FOUND", "Payment request not found.");
+  if (row.status === "settled") return paymentRequestJson(row);
+  if (row.status !== "verified") throw new AppError(400, "INVALID_STATE", "Workflow transition not allowed.");
+  return paymentRequestJson(
+    await prisma.payment_requests.update({
+      where: { id },
+      data: { status: "settled", settlementId: settlementId || row.settlementId },
+    })
+  );
+};
+
+exports.getHistory = async (id) => {
+  const row = await prisma.payment_requests.findUnique({ where: { id } });
+  if (!row) throw new AppError(404, "NOT_FOUND", "Payment request not found.");
+  const logs = await prisma.audit_log.findMany({
+    where: { entityType: "payment_request", entityId: id },
+    orderBy: { timestamp: "desc" },
+  });
+  return logs.map(auditJson);
+};

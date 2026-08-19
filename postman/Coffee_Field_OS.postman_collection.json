@@ -1,0 +1,2648 @@
+{
+  "info": {
+    "name": "Coffee Field OS",
+    "description": "SPX Coffee Field OS REST API (`/api/v1`).\n\n1. Select the Local environment.\n2. Run **Auth → Login as SPX principal** to store `accessToken`.\n3. Seed logins all use password `Password123!`.\n\nRole notes: revenue ledger is `spx_principal` only. Silva cannot list raw field tickets.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+        
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000/api/v1"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health",
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login as SPX principal",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"principal@spx.example\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 && pm.response.json().data) {",
+                  "  const d = pm.response.json().data;",
+                  "  if (d.accessToken) pm.environment.set('accessToken', d.accessToken);",
+                  "  if (d.refreshToken) pm.environment.set('refreshToken', d.refreshToken);",
+                  "  if (d.user && d.user.id) pm.environment.set('userId', d.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as system admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@spx.example\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 && pm.response.json().data) {",
+                  "  const d = pm.response.json().data;",
+                  "  if (d.accessToken) pm.environment.set('accessToken', d.accessToken);",
+                  "  if (d.refreshToken) pm.environment.set('refreshToken', d.refreshToken);",
+                  "  if (d.user && d.user.id) pm.environment.set('userId', d.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as SPX handler",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"handler@spx.example\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 && pm.response.json().data) {",
+                  "  const d = pm.response.json().data;",
+                  "  if (d.accessToken) pm.environment.set('accessToken', d.accessToken);",
+                  "  if (d.refreshToken) pm.environment.set('refreshToken', d.refreshToken);",
+                  "  if (d.user && d.user.id) pm.environment.set('userId', d.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as SPX field supervisor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"supervisor@spx.example\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 && pm.response.json().data) {",
+                  "  const d = pm.response.json().data;",
+                  "  if (d.accessToken) pm.environment.set('accessToken', d.accessToken);",
+                  "  if (d.refreshToken) pm.environment.set('refreshToken', d.refreshToken);",
+                  "  if (d.user && d.user.id) pm.environment.set('userId', d.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as Silva owner",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"owner@silva.example\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 && pm.response.json().data) {",
+                  "  const d = pm.response.json().data;",
+                  "  if (d.accessToken) pm.environment.set('accessToken', d.accessToken);",
+                  "  if (d.refreshToken) pm.environment.set('refreshToken', d.refreshToken);",
+                  "  if (d.user && d.user.id) pm.environment.set('userId', d.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as Silva country manager",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"naomi@silva.example\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 && pm.response.json().data) {",
+                  "  const d = pm.response.json().data;",
+                  "  if (d.accessToken) pm.environment.set('accessToken', d.accessToken);",
+                  "  if (d.refreshToken) pm.environment.set('refreshToken', d.refreshToken);",
+                  "  if (d.user && d.user.id) pm.environment.set('userId', d.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as Silva finance",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"finance@silva.example\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 && pm.response.json().data) {",
+                  "  const d = pm.response.json().data;",
+                  "  if (d.accessToken) pm.environment.set('accessToken', d.accessToken);",
+                  "  if (d.refreshToken) pm.environment.set('refreshToken', d.refreshToken);",
+                  "  if (d.user && d.user.id) pm.environment.set('userId', d.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as B-Agro admin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@bagro.example\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 && pm.response.json().data) {",
+                  "  const d = pm.response.json().data;",
+                  "  if (d.accessToken) pm.environment.set('accessToken', d.accessToken);",
+                  "  if (d.refreshToken) pm.environment.set('refreshToken', d.refreshToken);",
+                  "  if (d.user && d.user.id) pm.environment.set('userId', d.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as B-Agro field lead",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"lead@bagro.example\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 && pm.response.json().data) {",
+                  "  const d = pm.response.json().data;",
+                  "  if (d.accessToken) pm.environment.set('accessToken', d.accessToken);",
+                  "  if (d.refreshToken) pm.environment.set('refreshToken', d.refreshToken);",
+                  "  if (d.user && d.user.id) pm.environment.set('userId', d.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as B-Agro supervisor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"supervisor@bagro.example\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 && pm.response.json().data) {",
+                  "  const d = pm.response.json().data;",
+                  "  if (d.accessToken) pm.environment.set('accessToken', d.accessToken);",
+                  "  if (d.refreshToken) pm.environment.set('refreshToken', d.refreshToken);",
+                  "  if (d.user && d.user.id) pm.environment.set('userId', d.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login as B-Agro worker",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"worker@bagro.example\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 && pm.response.json().data) {",
+                  "  const d = pm.response.json().data;",
+                  "  if (d.accessToken) pm.environment.set('accessToken', d.accessToken);",
+                  "  if (d.refreshToken) pm.environment.set('refreshToken', d.refreshToken);",
+                  "  if (d.user && d.user.id) pm.environment.set('userId', d.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "Refresh",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/refresh",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 && pm.response.json().data) {",
+                  "  const d = pm.response.json().data;",
+                  "  if (d.accessToken) pm.environment.set('accessToken', d.accessToken);",
+                  "  if (d.refreshToken) pm.environment.set('refreshToken', d.refreshToken);",
+                  "  if (d.user && d.user.id) pm.environment.set('userId', d.user.id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/logout",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Forgot password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/password/forgot",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"principal@spx.example\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Reset password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/auth/password/reset",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{resetToken}}\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Organizations",
+      "item": [
+        {
+          "name": "List organizations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/organizations?page=1&pageSize=20"
+          }
+        },
+        {
+          "name": "Get organization",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/organizations/{{organizationId}}"
+          }
+        },
+        {
+          "name": "Create vendor organization",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/organizations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Vendor Ltd\",\n  \"type\": \"vendor\",\n  \"isDefaultExecutionPartner\": false,\n  \"category\": \"Harvest\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Patch organization",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/organizations/{{organizationId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Org Name\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List members",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/organizations/{{organizationId}}/members"
+          }
+        },
+        {
+          "name": "Create invite",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/organizations/{{organizationId}}/invites",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"new.worker@bagro.example\",\n  \"role\": \"vendor_worker\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List invites",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/organizations/{{organizationId}}/invites?status=pending"
+          }
+        },
+        {
+          "name": "Accept invite",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/invites/{{inviteId}}/accept",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{inviteToken}}\",\n  \"name\": \"Sara Hailu\",\n  \"password\": \"Password123!\"\n}"
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          }
+        },
+        {
+          "name": "Revoke invite",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/invites/{{inviteId}}/revoke",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "List users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/users?page=1&pageSize=20"
+          }
+        },
+        {
+          "name": "Get user",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/users/{{userId}}"
+          }
+        },
+        {
+          "name": "Create user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/users",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Omar\",\n  \"email\": \"omar@spx.example\",\n  \"role\": \"spx_account_handler\",\n  \"organizationId\": \"org_spx\",\n  \"password\": \"Password123!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Patch user",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/users/{{userId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Omar Updated\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Activate user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/users/{{userId}}/activate",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Deactivate user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/users/{{userId}}/deactivate",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Change membership role",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/memberships/{{membershipId}}/role",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"vendor_supervisor\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Silva owner",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/dashboard/silva-owner?year=2026"
+          }
+        },
+        {
+          "name": "SPX management",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/dashboard/spx-management?year=2026"
+          }
+        },
+        {
+          "name": "Vendor field",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/dashboard/vendor-field"
+          }
+        },
+        {
+          "name": "Dashboard notifications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/dashboard/notifications"
+          }
+        }
+      ]
+    },
+    {
+      "name": "AFP",
+      "item": [
+        {
+          "name": "List AFP lines",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/afp-lines?year=2026"
+          }
+        },
+        {
+          "name": "Get AFP line",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/afp-lines/{{afpLineId}}"
+          }
+        },
+        {
+          "name": "Create AFP line",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/afp-lines",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"year\": 2026,\n  \"operatingDiscipline\": \"Agronomic Operations\",\n  \"activity\": \"Soil sampling & nutrition program launch\",\n  \"budgetAllocatedUsd\": 18000,\n  \"kpiTarget\": \"Soil tested on 100% of blocks\",\n  \"notes\": null\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const d = pm.response.json().data;",
+                  "  const id = d.id;",
+                  "  if (id) pm.environment.set('afpLineId', id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update AFP (draft only)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/afp-lines/{{afpLineId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Updated notes\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Submit AFP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/afp-lines/{{afpLineId}}/submit",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Ready for Silva\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Approve AFP (Silva)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/afp-lines/{{afpLineId}}/approve",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Approved\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Close AFP",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/afp-lines/{{afpLineId}}/close",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Year closed\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "AFE",
+      "item": [
+        {
+          "name": "List AFEs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/afes?status=approved"
+          }
+        },
+        {
+          "name": "Get AFE",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/afes/{{afeId}}"
+          }
+        },
+        {
+          "name": "Create Band A AFE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/afes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"afpLineId\": \"{{afpLineId}}\",\n  \"operatingDiscipline\": \"Agronomic Operations\",\n  \"description\": \"Pruning Blocks 5 to 6\",\n  \"estimatedCostUsd\": 4500\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const d = pm.response.json().data;",
+                  "  const id = d.id;",
+                  "  if (id) pm.environment.set('afeId', id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Band C AFE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/afes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"afpLineId\": \"{{afpLineId}}\",\n  \"operatingDiscipline\": \"Infrastructure\",\n  \"description\": \"Washing station rehabilitation\",\n  \"estimatedCostUsd\": 32000\n}"
+            }
+          }
+        },
+        {
+          "name": "Update AFE (draft only)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/afes/{{afeId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated description\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Submit AFE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/afes/{{afeId}}/submit",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Submitted\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Validate AFE (SPX)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/afes/{{afeId}}/validate",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Validated\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Approve AFE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/afes/{{afeId}}/approve",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Approved\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Reject AFE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/afes/{{afeId}}/reject",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Scope too broad\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Close AFE",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/afes/{{afeId}}/close",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Complete\"\n}"
+            }
+          }
+        },
+        {
+          "name": "AFE history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/afes/{{afeId}}/history"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Work Orders",
+      "item": [
+        {
+          "name": "List work orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/work-orders"
+          }
+        },
+        {
+          "name": "Get work order",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/work-orders/{{workOrderId}}"
+          }
+        },
+        {
+          "name": "Create work order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/work-orders",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"afeId\": \"{{afeId}}\",\n  \"category\": \"Agronomic Operations\",\n  \"activity\": \"Scheduled pruning of Blocks 1 to 4\",\n  \"tier\": \"retainer\",\n  \"weekStart\": 3,\n  \"weekEnd\": 6,\n  \"spxOversightHoursL1\": 4,\n  \"spxOversightHoursL2\": 2,\n  \"spxOversightHoursL3\": 0,\n  \"assignedVendorId\": null\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const d = pm.response.json().data;",
+                  "  const id = d.id;",
+                  "  if (id) pm.environment.set('workOrderId', id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update work order (draft)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/work-orders/{{workOrderId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"activity\": \"Updated activity\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Issue work order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/work-orders/{{workOrderId}}/issue",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Issued\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Start work order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/work-orders/{{workOrderId}}/start",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Complete work order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/work-orders/{{workOrderId}}/complete",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Close work order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/work-orders/{{workOrderId}}/close",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Closed\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List assignments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/work-orders/{{workOrderId}}/assignments"
+          }
+        },
+        {
+          "name": "Add assignment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/work-orders/{{workOrderId}}/assignments",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"usr_bagro_lead\",\n  \"roleOnOrder\": \"vendor_field_lead\",\n  \"isPrimary\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Patch assignment",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/work-orders/{{workOrderId}}/assignments/{{assignmentId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isPrimary\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "List tasks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/work-orders/{{workOrderId}}/tasks"
+          }
+        },
+        {
+          "name": "Create task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/work-orders/{{workOrderId}}/tasks",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Mobilize 24 laborers\",\n  \"description\": \"Confirm attendance by 06:00.\",\n  \"assigneeUserId\": \"usr_bagro_worker\",\n  \"dueDate\": \"2026-01-21\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const d = pm.response.json().data;",
+                  "  const id = d.id;",
+                  "  if (id) pm.environment.set('taskId', id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Work Order Tasks",
+      "item": [
+        {
+          "name": "Get task",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/work-order-tasks/{{taskId}}"
+          }
+        },
+        {
+          "name": "Update task",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/work-order-tasks/{{taskId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated task\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Start task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/work-order-tasks/{{taskId}}/start",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Complete task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/work-order-tasks/{{taskId}}/complete",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Cancel task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/work-order-tasks/{{taskId}}/cancel",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Weather delay\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Field Tickets",
+      "item": [
+        {
+          "name": "List field tickets (SPX/vendor)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/field-tickets"
+          }
+        },
+        {
+          "name": "Create field ticket (vendor)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/field-tickets",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workOrderId\": \"{{workOrderId}}\",\n  \"activityRecorded\": \"Pruning completed on Blocks 1-2\",\n  \"areaHa\": 18.5,\n  \"laborCount\": 24,\n  \"materialsUsed\": \"Pruning saws, marking tape\",\n  \"ticketDate\": \"2026-01-22\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const d = pm.response.json().data;",
+                  "  const id = d.id;",
+                  "  if (id) pm.environment.set('fieldTicketId', id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get field ticket",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/field-tickets/{{fieldTicketId}}"
+          }
+        },
+        {
+          "name": "Update field ticket (draft)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/field-tickets/{{fieldTicketId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"laborCount\": 26\n}"
+            }
+          }
+        },
+        {
+          "name": "Submit field ticket",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/field-tickets/{{fieldTicketId}}/submit",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Vendor review",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/field-tickets/{{fieldTicketId}}/vendor-review",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Validate (SPX)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/field-tickets/{{fieldTicketId}}/validate",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"comment\": \"Signed off\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Reject field ticket",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/field-tickets/{{fieldTicketId}}/reject",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Area overstated\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Field ticket history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/field-tickets/{{fieldTicketId}}/history"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payment Requests",
+      "item": [
+        {
+          "name": "List payment requests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/payment-requests"
+          }
+        },
+        {
+          "name": "Create payment request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/payment-requests",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workOrderId\": \"{{workOrderId}}\",\n  \"fieldTicketId\": \"{{fieldTicketId}}\",\n  \"type\": \"bagro_fee\",\n  \"amountRequestedEtb\": 185000\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const d = pm.response.json().data;",
+                  "  const id = d.id;",
+                  "  if (id) pm.environment.set('paymentRequestId', id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get payment request",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/payment-requests/{{paymentRequestId}}"
+          }
+        },
+        {
+          "name": "Update payment request (draft)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/payment-requests/{{paymentRequestId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amountRequestedEtb\": 190000\n}"
+            }
+          }
+        },
+        {
+          "name": "Submit payment request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/payment-requests/{{paymentRequestId}}/submit",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Verify (SPX)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/payment-requests/{{paymentRequestId}}/verify",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Reject payment request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/payment-requests/{{paymentRequestId}}/reject",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Amount mismatch\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Settle payment request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/payment-requests/{{paymentRequestId}}/settle",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"settlementId\": \"{{settlementId}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Payment request history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/payment-requests/{{paymentRequestId}}/history"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Owner Settlements",
+      "item": [
+        {
+          "name": "List settlements",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/owner-settlements"
+          }
+        },
+        {
+          "name": "Create settlement",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/owner-settlements",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workOrderId\": \"{{workOrderId}}\",\n  \"paymentRequestId\": \"{{paymentRequestId}}\",\n  \"type\": \"bagro_fee\",\n  \"payee\": \"B-Agro Coffee Development PLC\",\n  \"amountEtb\": 185000\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const d = pm.response.json().data;",
+                  "  const id = d.id;",
+                  "  if (id) pm.environment.set('settlementId', id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get settlement",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/owner-settlements/{{settlementId}}"
+          }
+        },
+        {
+          "name": "Update settlement (draft)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/owner-settlements/{{settlementId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amountEtb\": 185000\n}"
+            }
+          }
+        },
+        {
+          "name": "Authorize (SPX)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/owner-settlements/{{settlementId}}/authorize",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Mark settled",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/owner-settlements/{{settlementId}}/mark-settled",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Vendors",
+      "item": [
+        {
+          "name": "List vendors",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/vendors"
+          }
+        },
+        {
+          "name": "Get vendor",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/vendors/{{vendorId}}"
+          }
+        },
+        {
+          "name": "Create vendor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/vendors",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Highland Harvest Ltd\",\n  \"category\": \"Harvest & Post-Harvest\",\n  \"servicesProvided\": \"Selective picking supervision\",\n  \"prequalified\": false,\n  \"insuranceOnFile\": false,\n  \"insuranceExpiry\": null,\n  \"isDefaultExecutionPartner\": false\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const d = pm.response.json().data;",
+                  "  const id = d.id;",
+                  "  if (id) pm.environment.set('vendorId', id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Patch vendor",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/vendors/{{vendorId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"prequalified\": true\n}"
+            }
+          }
+        },
+        {
+          "name": "Activate vendor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/vendors/{{vendorId}}/activate",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        },
+        {
+          "name": "Deactivate vendor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/vendors/{{vendorId}}/deactivate",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"terminated\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List vendor users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/vendors/{{vendorId}}/users"
+          }
+        },
+        {
+          "name": "Invite vendor user",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/vendors/{{vendorId}}/users/invite",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"picker@bagro.example\",\n  \"role\": \"vendor_worker\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Vendor Contracts",
+      "item": [
+        {
+          "name": "List contracts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/vendor-contracts"
+          }
+        },
+        {
+          "name": "Create contract",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/vendor-contracts",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vendorId\": \"{{vendorId}}\",\n  \"afeId\": \"{{afeId}}\",\n  \"contractValueUsd\": 8000,\n  \"procurementRoute\": \"sole_source\",\n  \"tenderStatus\": \"n_a\",\n  \"contractStart\": \"2026-03-01\",\n  \"contractEnd\": \"2026-06-30\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const d = pm.response.json().data;",
+                  "  const id = d.id;",
+                  "  if (id) pm.environment.set('contractId', id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get contract",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/vendor-contracts/{{contractId}}"
+          }
+        },
+        {
+          "name": "Patch contract",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/vendor-contracts/{{contractId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tenderStatus\": \"awarded\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Vendor Scorecards",
+      "item": [
+        {
+          "name": "List scorecards",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/vendor-scorecards"
+          }
+        },
+        {
+          "name": "Create scorecard",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/vendor-scorecards",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"vendorId\": \"{{vendorId}}\",\n  \"reviewPeriod\": \"Q2 2026\",\n  \"qualityScore\": 82,\n  \"timelinessScore\": 78,\n  \"costAdherenceScore\": 80,\n  \"notes\": \"On track.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get scorecard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/vendor-scorecards/{{scorecardId}}"
+          }
+        },
+        {
+          "name": "Patch scorecard",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/vendor-scorecards/{{scorecardId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"qualityScore\": 85\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Budget vs Actual",
+      "item": [
+        {
+          "name": "List BvA",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/budget-vs-actual?year=2026"
+          }
+        },
+        {
+          "name": "BvA summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/budget-vs-actual/summary?year=2026"
+          }
+        },
+        {
+          "name": "Patch FX config (principal)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/budget-vs-actual/config",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fxRateEtbPerUsd\": 57.2\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Governance",
+      "item": [
+        {
+          "name": "Accountability matrix",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/accountability-matrix"
+          }
+        },
+        {
+          "name": "Patch accountability",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/accountability-matrix/Agronomic%20Operations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"executeRole\": \"B-Agro\",\n  \"validateRole\": \"SPX\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Schedule 3 thresholds",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/schedule3-thresholds"
+          }
+        },
+        {
+          "name": "Patch Schedule 3 band",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/schedule3-thresholds/A",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"minValueUsd\": 0,\n  \"maxValueUsd\": 5000,\n  \"effectiveYear\": 2026\n}"
+            }
+          }
+        },
+        {
+          "name": "Schedule 4 insurance",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/schedule4-insurance"
+          }
+        },
+        {
+          "name": "Patch Schedule 4",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/schedule4-insurance/{{insuranceRuleId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"minimumCoverageUsd\": 200000\n}"
+            }
+          }
+        },
+        {
+          "name": "Related-party disclosures",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/related-party-disclosures"
+          }
+        },
+        {
+          "name": "Create disclosure",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/related-party-disclosures",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"party\": \"B-Agro\",\n  \"relationship\": \"Disclosed associate of the Manager\",\n  \"period\": \"2026\",\n  \"notes\": \"Schedule 6\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Patch disclosure",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/related-party-disclosures/{{disclosureId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Updated\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Revenue Ledger (SPX principal)",
+      "item": [
+        {
+          "name": "List ledger",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/revenue-ledger"
+          }
+        },
+        {
+          "name": "Create entry",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/revenue-ledger",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"period\": \"2026-02\",\n  \"tier\": \"retainer\",\n  \"feeDescription\": \"Year 1 Main Figure monthly recognition\",\n  \"amountUsd\": 16250,\n  \"amountEtb\": 0,\n  \"invoiceDate\": \"2026-02-28\",\n  \"paymentStatus\": \"invoiced\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get entry",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/revenue-ledger/{{revenueEntryId}}"
+          }
+        },
+        {
+          "name": "Patch entry",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/revenue-ledger/{{revenueEntryId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"paymentStatus\": \"paid\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Export entry",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/revenue-ledger/{{revenueEntryId}}/export",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "List reports",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reports"
+          }
+        },
+        {
+          "name": "Generate weekly",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/generate/weekly",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"periodStart\": \"2026-01-13\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Generate monthly",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/generate/monthly",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"period\": \"2026-01\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Generate quarterly",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/generate/quarterly",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"period\": \"2026-Q1\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Generate annual",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/generate/annual",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"period\": \"2026\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/reports/{{reportId}}"
+          }
+        },
+        {
+          "name": "Patch narrative",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{reportId}}/narrative",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"narrative\": \"SPX monthly narrative for Silva.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Release report",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/reports/{{reportId}}/release",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "List notifications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/notifications?acknowledged=false"
+          }
+        },
+        {
+          "name": "Acknowledge",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/notifications/{{notificationId}}/acknowledge",
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Audit",
+      "item": [
+        {
+          "name": "List audit log",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/audit-log"
+          }
+        },
+        {
+          "name": "Get audit item",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/audit-log/{{auditId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "COA and GL",
+      "item": [
+        {
+          "name": "List COA mapping",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/coa-mapping"
+          }
+        },
+        {
+          "name": "Create COA mapping",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/coa-mapping",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sourceAccount\": \"AFP-pruning\",\n  \"glAccount\": \"6100-Field Operations\",\n  \"description\": \"Pruning spend\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Patch COA mapping",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/coa-mapping/{{coaMappingId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"description\": \"Updated\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List GL exports",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gl-journal-exports"
+          }
+        },
+        {
+          "name": "Generate GL export",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/gl-journal-exports/generate",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"period\": \"2026-01\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const d = pm.response.json().data;",
+                  "  const id = d.id;",
+                  "  if (id) pm.environment.set('glExportId', id);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get GL export (metadata, SPX)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gl-journal-exports/{{glExportId}}"
+          }
+        },
+        {
+          "name": "Get GL export rows (restricted credential)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/gl-journal-exports/{{glExportId}}",
+            "description": "Uses a `typ=gl_export` JWT (`JWT_GL_EXPORT_SECRET`), not a user access token. Set `glExportToken` in the environment.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{glExportToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Attachments",
+      "item": [
+        {
+          "name": "Get upload URL",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/attachments/upload-url",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entityType\": \"field_ticket\",\n  \"entityId\": \"{{fieldTicketId}}\",\n  \"fileName\": \"blocks-1-2.jpg\",\n  \"contentType\": \"image/jpeg\",\n  \"sizeBytes\": 240112\n}"
+            }
+          }
+        },
+        {
+          "name": "Register attachment",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/attachments",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entityType\": \"field_ticket\",\n  \"entityId\": \"{{fieldTicketId}}\",\n  \"fileName\": \"blocks-1-2.jpg\",\n  \"contentType\": \"image/jpeg\",\n  \"sizeBytes\": 240112,\n  \"storageKey\": \"field_ticket/{{fieldTicketId}}/blocks-1-2.jpg\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Get attachment",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/attachments/{{attachmentId}}"
+          }
+        },
+        {
+          "name": "Delete attachment (draft parent)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/attachments/{{attachmentId}}"
+          }
+        }
+      ]
+    }
+  ]
+}

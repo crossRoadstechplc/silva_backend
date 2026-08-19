@@ -1,0 +1,622 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum OrganizationType {
+  silva
+  spx
+  vendor
+}
+
+enum AfeBand {
+  A
+  B
+  C
+  D
+}
+
+enum AfpStatus {
+  draft
+  submitted
+  approved
+  active
+  closed
+}
+
+enum AfeStatus {
+  draft
+  submitted
+  validated
+  approved
+  active
+  closed
+  rejected
+}
+
+enum WorkOrderStatus {
+  draft
+  issued
+  in_progress
+  complete
+  closed
+}
+
+enum WorkOrderTier {
+  retainer
+  project
+  special
+}
+
+enum TaskStatus {
+  draft
+  open
+  in_progress
+  complete
+  cancelled
+}
+
+enum FieldTicketStatus {
+  draft
+  submitted
+  vendor_reviewed
+  validated
+  rejected
+}
+
+enum PaymentRequestStatus {
+  draft
+  submitted
+  verified
+  rejected
+  settled
+}
+
+enum PaymentRequestType {
+  bagro_fee
+  reimbursable_cost
+  vendor_fee
+}
+
+enum SettlementStatus {
+  draft
+  authorized
+  settled
+}
+
+enum SettlementType {
+  bagro_fee
+  labor_wages
+  vendor_payment
+}
+
+enum VendorStatus {
+  active
+  pending
+  expired
+  terminated
+}
+
+enum ProcurementRoute {
+  sole_source
+  competitive_tender
+}
+
+enum TenderStatus {
+  n_a
+  in_progress
+  awarded
+}
+
+enum RevenueTier {
+  retainer
+  project
+  special
+}
+
+enum InvoicePaymentStatus {
+  invoiced
+  paid
+  overdue
+}
+
+enum ReportType {
+  weekly
+  monthly
+  quarterly
+  annual
+}
+
+enum ReportStatus {
+  draft
+  in_review
+  released
+}
+
+enum InviteStatus {
+  pending
+  accepted
+  revoked
+  expired
+}
+
+enum GlExportStatus {
+  pending
+  ready
+  failed
+}
+
+model organizations {
+  id                        String           @id
+  name                      String
+  type                      OrganizationType
+  isDefaultExecutionPartner Boolean          @default(false)
+  active                    Boolean          @default(true)
+  createdAt                 DateTime         @default(now())
+  updatedAt                 DateTime         @updatedAt
+
+  users                     users[]
+  memberships               organization_memberships[]
+  invites                   invites[]
+  vendor                    vendors?
+}
+
+model users {
+  id             String   @id
+  name           String
+  email          String   @unique
+  passwordHash   String
+  role           String
+  organizationId String
+  vendorId       String?
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   organizations @relation(fields: [organizationId], references: [id])
+  vendor         vendors?      @relation(fields: [vendorId], references: [id])
+  memberships    organization_memberships[]
+  invitesSent    invites[]     @relation("InvitedBy")
+  refreshSessions refresh_sessions[]
+  notifications  notifications[]
+  auditLogs      audit_log[]
+  attachments    attachments[]
+  assignedWos    work_order_assignments[]
+  tasksAssigned  work_order_tasks[] @relation("TaskAssignee")
+  tasksCreated   work_order_tasks[] @relation("TaskCreator")
+  fieldTickets   field_tickets[]    @relation("TicketSubmitter")
+  ticketsSigned  field_tickets[]    @relation("TicketSigner")
+  paymentRequests payment_requests[] @relation("PrRequester")
+  prsVerified    payment_requests[] @relation("PrVerifier")
+  settlementsAuth owner_settlements[] @relation("SettlementAuthorizer")
+  scorecards     vendor_scorecards[]
+  reportsReleased reports[]
+  afpCreated     afp_lines[]
+  afeCreated     afes[]
+
+  @@index([organizationId])
+  @@index([role])
+}
+
+model organization_memberships {
+  id             String   @id
+  userId         String
+  organizationId String
+  role           String
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  user           users         @relation(fields: [userId], references: [id])
+  organization   organizations @relation(fields: [organizationId], references: [id])
+
+  @@unique([userId, organizationId])
+}
+
+model invites {
+  id              String       @id
+  organizationId  String
+  vendorId        String?
+  email           String
+  role            String
+  status          InviteStatus @default(pending)
+  tokenHash       String
+  invitedByUserId String
+  expiresAt       DateTime
+  createdAt       DateTime     @default(now())
+
+  organization    organizations @relation(fields: [organizationId], references: [id])
+  invitedBy       users         @relation("InvitedBy", fields: [invitedByUserId], references: [id])
+}
+
+model refresh_sessions {
+  id        String   @id
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model password_reset_tokens {
+  id        String   @id
+  email     String
+  tokenHash String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model restricted_export_credentials {
+  id        String    @id
+  name      String
+  tokenHash String    @unique
+  active    Boolean   @default(true)
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+}
+
+model vendors {
+  id                        String       @id
+  organizationId            String       @unique
+  name                      String
+  category                  String
+  servicesProvided          String       @default("")
+  prequalified              Boolean      @default(false)
+  insuranceOnFile           Boolean      @default(false)
+  insuranceExpiry           DateTime?
+  status                    VendorStatus @default(pending)
+  isDefaultExecutionPartner Boolean      @default(false)
+  createdAt                 DateTime     @default(now())
+  updatedAt                 DateTime     @updatedAt
+
+  organization              organizations @relation(fields: [organizationId], references: [id])
+  users                     users[]
+  workOrders                work_orders[]
+  contracts                 vendor_contracts[]
+  scorecards                vendor_scorecards[]
+}
+
+model afp_lines {
+  id                  String    @id
+  year                Int
+  operatingDiscipline String
+  activity            String
+  budgetAllocatedUsd  Decimal   @db.Decimal(14, 2)
+  kpiTarget           String
+  status              AfpStatus @default(draft)
+  silvaApproved       Boolean   @default(false)
+  approvalDate        DateTime?
+  notes               String?
+  createdByUserId     String
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  createdBy           users     @relation(fields: [createdByUserId], references: [id])
+  afes                afes[]
+
+  @@index([year, status])
+}
+
+model afes {
+  id                    String    @id
+  afpLineId             String
+  operatingDiscipline   String
+  description           String
+  estimatedCostUsd      Decimal   @db.Decimal(14, 2)
+  band                  AfeBand
+  spxValidated          Boolean   @default(false)
+  silvaApprovalRequired Boolean
+  silvaApproved         Boolean?
+  approvalDate          DateTime?
+  status                AfeStatus @default(draft)
+  createdByUserId       String
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  afp                   afp_lines @relation(fields: [afpLineId], references: [id])
+  createdBy             users     @relation(fields: [createdByUserId], references: [id])
+  workOrders            work_orders[]
+  contracts             vendor_contracts[]
+
+  @@index([status, band])
+}
+
+model work_orders {
+  id                  String          @id
+  afeId               String
+  category            String
+  activity            String
+  tier                WorkOrderTier
+  weekStart           Int
+  weekEnd             Int
+  spxOversightHoursL1 Int             @default(0)
+  spxOversightHoursL2 Int             @default(0)
+  spxOversightHoursL3 Int             @default(0)
+  assignedVendorId    String?
+  status              WorkOrderStatus @default(draft)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  afe                 afes            @relation(fields: [afeId], references: [id])
+  assignedVendor      vendors?        @relation(fields: [assignedVendorId], references: [id])
+  assignments         work_order_assignments[]
+  tasks               work_order_tasks[]
+  fieldTickets        field_tickets[]
+  paymentRequests     payment_requests[]
+  settlements         owner_settlements[]
+}
+
+model work_order_assignments {
+  id          String       @id
+  workOrderId String
+  userId      String
+  roleOnOrder String
+  isPrimary   Boolean      @default(false)
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  workOrder   work_orders  @relation(fields: [workOrderId], references: [id])
+  user        users        @relation(fields: [userId], references: [id])
+}
+
+model work_order_tasks {
+  id              String      @id
+  workOrderId     String
+  title           String
+  description     String      @default("")
+  assigneeUserId  String?
+  status          TaskStatus  @default(open)
+  dueDate         DateTime?
+  createdByUserId String
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  workOrder       work_orders @relation(fields: [workOrderId], references: [id])
+  assignee        users?      @relation("TaskAssignee", fields: [assigneeUserId], references: [id])
+  createdBy       users       @relation("TaskCreator", fields: [createdByUserId], references: [id])
+}
+
+model field_tickets {
+  id                String            @id
+  workOrderId       String
+  submittedByUserId String
+  activityRecorded  String
+  areaHa            Decimal           @db.Decimal(10, 2)
+  laborCount        Int
+  materialsUsed     String            @default("")
+  ticketDate        DateTime
+  signedOff         Boolean           @default(false)
+  signedOffByUserId String?
+  signedOffAt       DateTime?
+  status            FieldTicketStatus @default(draft)
+  paymentRequestId  String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  workOrder         work_orders       @relation(fields: [workOrderId], references: [id])
+  submittedBy       users             @relation("TicketSubmitter", fields: [submittedByUserId], references: [id])
+  signedOffBy       users?            @relation("TicketSigner", fields: [signedOffByUserId], references: [id])
+  paymentRequests   payment_requests[]
+}
+
+model payment_requests {
+  id                  String               @id
+  workOrderId         String
+  fieldTicketId       String
+  requestedByUserId   String
+  type                PaymentRequestType
+  amountRequestedEtb  Decimal              @db.Decimal(14, 2)
+  dateSubmitted       DateTime?
+  spxVerified         Boolean              @default(false)
+  spxVerifiedByUserId String?
+  verifiedDate        DateTime?
+  status              PaymentRequestStatus @default(draft)
+  settlementId        String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  workOrder           work_orders          @relation(fields: [workOrderId], references: [id])
+  fieldTicket         field_tickets        @relation(fields: [fieldTicketId], references: [id])
+  requestedBy         users                @relation("PrRequester", fields: [requestedByUserId], references: [id])
+  verifiedBy          users?               @relation("PrVerifier", fields: [spxVerifiedByUserId], references: [id])
+  settlements         owner_settlements[]
+}
+
+model owner_settlements {
+  id                 String           @id
+  workOrderId        String
+  paymentRequestId   String
+  type               SettlementType
+  payee              String
+  amountEtb          Decimal          @db.Decimal(14, 2)
+  spxAuthorized      Boolean          @default(false)
+  authorizedByUserId String?
+  dateAuthorized     DateTime?
+  status             SettlementStatus @default(draft)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  workOrder          work_orders      @relation(fields: [workOrderId], references: [id])
+  paymentRequest     payment_requests @relation(fields: [paymentRequestId], references: [id])
+  authorizedBy       users?           @relation("SettlementAuthorizer", fields: [authorizedByUserId], references: [id])
+}
+
+model vendor_contracts {
+  id               String           @id
+  vendorId         String
+  afeId            String
+  contractValueUsd Decimal          @db.Decimal(14, 2)
+  procurementRoute ProcurementRoute
+  tenderStatus     TenderStatus     @default(n_a)
+  contractStart    DateTime
+  contractEnd      DateTime
+  vendor           vendors          @relation(fields: [vendorId], references: [id])
+  afe              afes             @relation(fields: [afeId], references: [id])
+}
+
+model vendor_scorecards {
+  id                 String   @id
+  vendorId           String
+  reviewPeriod       String
+  qualityScore       Int
+  timelinessScore    Int
+  costAdherenceScore Int
+  overallScore       Int
+  reviewedByUserId   String
+  notes              String?
+  createdAt          DateTime @default(now())
+  vendor             vendors  @relation(fields: [vendorId], references: [id])
+  reviewedBy         users    @relation(fields: [reviewedByUserId], references: [id])
+
+  @@unique([vendorId, reviewPeriod])
+}
+
+model spx_revenue_ledger {
+  id             String               @id
+  period         String
+  tier           RevenueTier
+  feeDescription String
+  amountEtb      Decimal              @db.Decimal(14, 2)
+  amountUsd      Decimal              @db.Decimal(14, 2)
+  invoiceDate    DateTime
+  paymentStatus  InvoicePaymentStatus @default(invoiced)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+}
+
+model coa_mapping {
+  id            String @id
+  sourceAccount String
+  glAccount     String
+  description   String @default("")
+}
+
+model gl_journal_exports {
+  id                          String         @id
+  period                      String
+  status                      GlExportStatus @default(pending)
+  restrictedAccessTokenIssued Boolean        @default(false)
+  storageKey                  String?
+  createdAt                   DateTime       @default(now())
+  lines                       gl_journal_export_lines[]
+}
+
+model gl_journal_export_lines {
+  id        String              @id
+  exportId  String
+  date      DateTime
+  account   String
+  debitEtb  Decimal             @db.Decimal(14, 2)
+  creditEtb Decimal             @db.Decimal(14, 2)
+  memo      String
+  export    gl_journal_exports  @relation(fields: [exportId], references: [id], onDelete: Cascade)
+}
+
+model schedule3_thresholds {
+  band           AfeBand  @id
+  minValueUsd    Decimal  @db.Decimal(14, 2)
+  maxValueUsd    Decimal? @db.Decimal(14, 2)
+  spxAuthority   String
+  silvaAuthority String
+  effectiveYear  Int
+}
+
+model schedule4_insurance {
+  id                 String  @id
+  party              String
+  coverageType       String
+  minimumCoverageUsd Decimal @db.Decimal(14, 2)
+  beneficiary        String
+}
+
+model accountability_matrix {
+  operatingDiscipline String @id
+  executeRole         String
+  validateRole        String
+  decideRole          String
+  authorRole          String
+  schedule3Ref        String
+}
+
+model related_party_disclosures {
+  id           String   @id
+  party        String
+  relationship String
+  period       String
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model platform_config {
+  id                       String  @id @default("default")
+  fxRateEtbPerUsd          Decimal @db.Decimal(10, 4)
+  enhancedGovernanceActive Boolean @default(true)
+}
+
+model harvest_kpi_snapshots {
+  id                          String   @id
+  year                        Int      @unique
+  pickerProductivityCurrent   Decimal  @db.Decimal(10, 2)
+  yieldTrendVsBaselinePercent Decimal  @db.Decimal(10, 2)
+  createdAt                   DateTime @default(now())
+}
+
+model reports {
+  id               String       @id
+  type             ReportType
+  period           String
+  status           ReportStatus @default(draft)
+  generatedAt      DateTime     @default(now())
+  narrative        String?
+  releasedAt       DateTime?
+  releasedByUserId String?
+  visibleToSilva   Boolean      @default(false)
+  sections         Json?
+  releasedBy       users?       @relation(fields: [releasedByUserId], references: [id])
+}
+
+model notifications {
+  id              String   @id
+  triggerType     String
+  entityType      String
+  entityId        String
+  recipientRole   String
+  recipientUserId String?
+  message         String
+  sentAt          DateTime @default(now())
+  acknowledged    Boolean  @default(false)
+  recipient       users?   @relation(fields: [recipientUserId], references: [id])
+}
+
+model audit_log {
+  id         String   @id
+  userId     String?
+  entityType String
+  entityId   String
+  action     String
+  oldValue   Json?
+  newValue   Json?
+  timestamp  DateTime @default(now())
+  user       users?   @relation(fields: [userId], references: [id])
+
+  @@index([entityType, entityId])
+}
+
+model attachments {
+  id               String   @id
+  entityType       String
+  entityId         String
+  fileName         String
+  contentType      String
+  sizeBytes        Int
+  storageKey       String
+  uploadedByUserId String
+  createdAt        DateTime @default(now())
+  uploadedBy       users    @relation(fields: [uploadedByUserId], references: [id])
+}
+
+model id_sequences {
+  name      String @id
+  lastValue Int    @default(0)
+}
