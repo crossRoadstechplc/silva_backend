@@ -4,10 +4,12 @@ const { nextTextId } = require("../utils/ids");
 const { decimal, parseListQuery, meta } = require("../utils/helpers");
 const { settlementJson } = require("../utils/serializers");
 const { isVendorRole } = require("../utils/roles");
+const { assertMakerChecker } = require("./utils/makerChecker");
+const { scopedWhere, programCreateData, requireProgramId } = require("./utils/programScope");
 
 exports.findAll = async (query, user) => {
   const { page, pageSize, skip, take, statuses } = parseListQuery(query);
-  const where = {};
+  const where = scopedWhere(user);
   if (isVendorRole(user.role)) {
     const vendor = await prisma.vendors.findUnique({ where: { id: user.vendorId || "" } });
     if (vendor) where.payee = vendor.name;
@@ -23,27 +25,28 @@ exports.findAll = async (query, user) => {
 };
 
 exports.findOne = async (id, user) => {
-  const row = await prisma.owner_settlements.findUnique({ where: { id } });
+  const row = await prisma.owner_settlements.findFirst({ where: scopedWhere(user, { id }) });
   if (!row) throw new AppError(404, "NOT_FOUND", "Settlement not found.");
   return settlementJson(row);
 };
 
 exports.create = async (dto, user) => {
-  const pr = await prisma.payment_requests.findUnique({ where: { id: dto.paymentRequestId } });
+  const programId = requireProgramId(user);
+  const pr = await prisma.payment_requests.findFirst({ where: { id: dto.paymentRequestId, programId } });
   if (!pr) throw new AppError(404, "NOT_FOUND", "Payment request not found.");
   if (pr.status !== "verified") {
     throw new AppError(422, "BUSINESS_RULE_VIOLATION", "Payment request must be verified before settlement.");
   }
   const id = await nextTextId("stl", "STL");
   const row = await prisma.owner_settlements.create({
-    data: {
+    data: programCreateData(user, {
       id,
       workOrderId: dto.workOrderId,
       paymentRequestId: dto.paymentRequestId,
       type: dto.type,
       payee: dto.payee,
       amountEtb: decimal(dto.amountEtb),
-    },
+    }),
   });
   return settlementJson(row);
 };
@@ -71,9 +74,15 @@ exports.authorize = async (id, user) => {
   if (!row) throw new AppError(404, "NOT_FOUND", "Settlement not found.");
   if (row.status === "authorized") return settlementJson(row);
   if (row.status !== "draft") throw new AppError(400, "INVALID_STATE", "Workflow transition not allowed.");
-  if (row.paymentRequest.requestedByUserId === user.id) {
-    throw new AppError(409, "MAKER_CHECKER_VIOLATION", "Actor cannot approve own submission.");
+  if (user.organizationType !== "spx") {
+    throw new AppError(403, "FORBIDDEN", "Only SPX can authorize settlements.");
   }
+  await assertMakerChecker({
+    actor: user,
+    submitterUserId: row.paymentRequest?.requestedByUserId,
+    prisma,
+    actionLabel: "authorize",
+  });
   return settlementJson(
     await prisma.owner_settlements.update({
       where: { id },

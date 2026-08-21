@@ -4,13 +4,21 @@ const { nextTextId } = require("../utils/ids");
 const { decimal, parseListQuery, meta } = require("../utils/helpers");
 const { paymentRequestJson, auditJson } = require("../utils/serializers");
 const { isVendorRole, isSilvaRole } = require("../utils/roles");
+const { assertMakerChecker } = require("./utils/makerChecker");
+const { scopedWhere, programCreateData, requireProgramId } = require("./utils/programScope");
 
 exports.findAll = async (query, user) => {
+  if (isSilvaRole(user.role)) {
+    throw new AppError(
+      403,
+      "FIREWALL_VIOLATION",
+      "Silva cannot access raw payment requests; use settlements and dashboard summaries.",
+    );
+  }
   const { page, pageSize, skip, take, statuses } = parseListQuery(query);
-  const where = {};
+  const where = scopedWhere(user);
   if (isVendorRole(user.role)) where.requestedByUserId = user.id;
-  if (isSilvaRole(user.role)) where.status = { in: ["verified", "settled"] };
-  if (statuses.length && !isSilvaRole(user.role)) where.status = { in: statuses };
+  if (statuses.length) where.status = { in: statuses };
   if (query.workOrderId) where.workOrderId = query.workOrderId;
   if (query.type) where.type = query.type;
   const [rows, total] = await Promise.all([
@@ -21,33 +29,41 @@ exports.findAll = async (query, user) => {
 };
 
 exports.findOne = async (id, user) => {
-  const row = await prisma.payment_requests.findUnique({ where: { id } });
+  if (isSilvaRole(user.role)) {
+    throw new AppError(
+      403,
+      "FIREWALL_VIOLATION",
+      "Silva cannot access raw payment requests; use settlements and dashboard summaries.",
+    );
+  }
+  const row = await prisma.payment_requests.findFirst({ where: scopedWhere(user, { id }) });
   if (!row) throw new AppError(404, "NOT_FOUND", "Payment request not found.");
   if (isVendorRole(user.role) && row.requestedByUserId !== user.id) {
-    throw new AppError(404, "NOT_FOUND", "Payment request not found.");
-  }
-  if (isSilvaRole(user.role) && !["verified", "settled"].includes(row.status)) {
     throw new AppError(404, "NOT_FOUND", "Payment request not found.");
   }
   return paymentRequestJson(row);
 };
 
 exports.create = async (dto, user) => {
-  const ticket = await prisma.field_tickets.findUnique({ where: { id: dto.fieldTicketId } });
+  if (!isVendorRole(user.role)) {
+    throw new AppError(403, "FORBIDDEN", "Only vendor roles can create payment requests.");
+  }
+  const programId = requireProgramId(user);
+  const ticket = await prisma.field_tickets.findFirst({ where: { id: dto.fieldTicketId, programId } });
   if (!ticket) throw new AppError(404, "NOT_FOUND", "Field ticket not found.");
-  if (!ticket.signedOff) {
+  if (!ticket.signedOff || ticket.status !== "validated") {
     throw new AppError(422, "BUSINESS_RULE_VIOLATION", "Payment Request requires a signed-off Field Ticket.");
   }
   const id = await nextTextId("pr", "PR");
   const row = await prisma.payment_requests.create({
-    data: {
+    data: programCreateData(user, {
       id,
       workOrderId: dto.workOrderId,
       fieldTicketId: dto.fieldTicketId,
       requestedByUserId: user.id,
       type: dto.type,
       amountRequestedEtb: decimal(dto.amountRequestedEtb),
-    },
+    }),
   });
   await prisma.field_tickets.update({ where: { id: ticket.id }, data: { paymentRequestId: row.id } });
   return paymentRequestJson(row);
@@ -76,27 +92,24 @@ exports.submit = async (id, user) => {
     await prisma.payment_requests.update({
       where: { id },
       data: { status: "submitted", dateSubmitted: new Date() },
-    })
+    }),
   );
 };
 
 exports.verify = async (id, user) => {
-  const row = await prisma.payment_requests.findUnique({
-    where: { id },
-    include: { requestedBy: true },
-  });
+  const row = await prisma.payment_requests.findUnique({ where: { id } });
   if (!row) throw new AppError(404, "NOT_FOUND", "Payment request not found.");
   if (row.status === "verified") return paymentRequestJson(row);
   if (row.status !== "submitted") throw new AppError(400, "INVALID_STATE", "Workflow transition not allowed.");
-  if (row.requestedByUserId === user.id) {
-    throw new AppError(409, "MAKER_CHECKER_VIOLATION", "Actor cannot approve own submission.");
-  }
-  if (user.organizationType === row.requestedBy.organization?.type && user.organizationType !== "spx") {
-    throw new AppError(409, "MAKER_CHECKER_VIOLATION", "Verifier must be a different organization.");
-  }
   if (user.organizationType !== "spx") {
     throw new AppError(403, "FORBIDDEN", "Only SPX can verify payment requests.");
   }
+  await assertMakerChecker({
+    actor: user,
+    submitterUserId: row.requestedByUserId,
+    prisma,
+    actionLabel: "verify",
+  });
   return paymentRequestJson(
     await prisma.payment_requests.update({
       where: { id },
@@ -106,7 +119,7 @@ exports.verify = async (id, user) => {
         spxVerifiedByUserId: user.id,
         verifiedDate: new Date(),
       },
-    })
+    }),
   );
 };
 
@@ -127,7 +140,7 @@ exports.settle = async (id, settlementId, user) => {
     await prisma.payment_requests.update({
       where: { id },
       data: { status: "settled", settlementId: settlementId || row.settlementId },
-    })
+    }),
   );
 };
 

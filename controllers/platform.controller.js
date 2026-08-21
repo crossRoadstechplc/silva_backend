@@ -178,7 +178,7 @@ exports.patchDisclosure = catchAsync(async (req, res) => {
   res.json({ data });
 });
 exports.listAccountability = catchAsync(async (req, res) => {
-  const data = await platformService.listAccountability();
+  const data = await platformService.listAccountability(req.user);
   res.json({ data });
 });
 exports.patchAccountability = catchAsync(async (req, res) => {
@@ -186,7 +186,7 @@ exports.patchAccountability = catchAsync(async (req, res) => {
   res.json({ data });
 });
 exports.listSchedule3 = catchAsync(async (req, res) => {
-  const data = await platformService.listSchedule3();
+  const data = await platformService.listSchedule3(req.user);
   res.json({ data });
 });
 exports.patchSchedule3 = catchAsync(async (req, res) => {
@@ -194,7 +194,7 @@ exports.patchSchedule3 = catchAsync(async (req, res) => {
   res.json({ data });
 });
 exports.listSchedule4 = catchAsync(async (req, res) => {
-  const data = await platformService.listSchedule4();
+  const data = await platformService.listSchedule4(req.user);
   res.json({ data });
 });
 exports.patchSchedule4 = catchAsync(async (req, res) => {

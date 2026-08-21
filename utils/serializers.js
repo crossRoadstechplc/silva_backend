@@ -10,6 +10,7 @@ function userJson(user) {
     organizationType: user.organization?.type || user.organizationType || null,
     organizationId: user.organizationId,
     vendorId: user.vendorId || null,
+    activeProgramId: user.activeProgramId || null,
     active: user.active,
     createdAt: iso(user.createdAt),
   };
@@ -20,7 +21,11 @@ function organizationJson(org) {
   return {
     id: org.id,
     name: org.name,
+    slug: org.slug || null,
+    displayName: org.displayName || org.name,
     type: org.type,
+    branding: org.brandingJson || null,
+    status: org.status || "active",
     vendorId: v?.id || null,
     isDefaultExecutionPartner: Boolean(v?.isDefaultExecutionPartner || org.isDefaultExecutionPartner),
     active: org.active,

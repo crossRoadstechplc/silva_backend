@@ -13,6 +13,23 @@ enum OrganizationType {
   vendor
 }
 
+enum TenantStatus {
+  active
+  suspended
+}
+
+enum ProgramStatus {
+  active
+  archived
+}
+
+enum ProgramMemberRole {
+  owner
+  manager
+  executor
+  viewer
+}
+
 enum AfeBand {
   A
   B
@@ -153,7 +170,11 @@ enum GlExportStatus {
 model organizations {
   id                        String           @id
   name                      String
+  slug                      String           @unique
+  displayName               String
   type                      OrganizationType
+  brandingJson              Json?
+  status                    TenantStatus     @default(active)
   isDefaultExecutionPartner Boolean          @default(false)
   active                    Boolean          @default(true)
   createdAt                 DateTime         @default(now())
@@ -163,43 +184,116 @@ model organizations {
   memberships               organization_memberships[]
   invites                   invites[]
   vendor                    vendors?
+  programsCreated           programs[]       @relation("ProgramCreator")
+  programMemberships        program_memberships[]
+  programInvitesSent        program_org_invites[] @relation("ProgramInviteFrom")
+  programInvitesReceived    program_org_invites[] @relation("ProgramInviteTo")
+}
+
+model programs {
+  id              String        @id
+  name            String
+  slug            String        @unique
+  status          ProgramStatus @default(active)
+  brandingJson    Json?
+  createdByOrgId  String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  createdByOrg    organizations @relation("ProgramCreator", fields: [createdByOrgId], references: [id])
+  memberships     program_memberships[]
+  orgInvites      program_org_invites[]
+  usersActive     users[]       @relation("ActiveProgram")
+
+  afpLines        afp_lines[]
+  afes            afes[]
+  workOrders      work_orders[]
+  fieldTickets    field_tickets[]
+  paymentRequests payment_requests[]
+  settlements     owner_settlements[]
+  revenueLedger   spx_revenue_ledger[]
+  reports         reports[]
+  notifications   notifications[]
+  harvestKpis     harvest_kpi_snapshots[]
+  auditLogs       audit_log[]
+  schedule3       schedule3_thresholds[]
+  schedule4       schedule4_insurance[]
+  accountability  accountability_matrix[]
+  platformConfig  platform_config?
+  disclosures     related_party_disclosures[]
+  glExports       gl_journal_exports[]
+}
+
+model program_memberships {
+  id             String            @id
+  programId      String
+  organizationId String
+  roleInProgram  ProgramMemberRole @default(manager)
+  createdAt      DateTime          @default(now())
+
+  program        programs          @relation(fields: [programId], references: [id], onDelete: Cascade)
+  organization   organizations     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([programId, organizationId])
+  @@index([organizationId])
+}
+
+model program_org_invites {
+  id                String       @id
+  programId         String
+  fromOrganizationId String
+  toOrganizationId  String?
+  toOrgSlug         String?
+  toEmail           String?
+  roleInProgram     ProgramMemberRole @default(executor)
+  status            InviteStatus @default(pending)
+  tokenHash         String       @unique
+  expiresAt         DateTime
+  createdAt         DateTime     @default(now())
+
+  program           programs     @relation(fields: [programId], references: [id], onDelete: Cascade)
+  fromOrganization  organizations @relation("ProgramInviteFrom", fields: [fromOrganizationId], references: [id])
+  toOrganization    organizations? @relation("ProgramInviteTo", fields: [toOrganizationId], references: [id])
 }
 
 model users {
-  id             String   @id
-  name           String
-  email          String   @unique
-  passwordHash   String
-  role           String
-  organizationId String
-  vendorId       String?
-  active         Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id               String   @id
+  name             String
+  email            String   @unique
+  passwordHash     String
+  role             String
+  organizationId   String
+  vendorId         String?
+  activeProgramId  String?
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  organization   organizations @relation(fields: [organizationId], references: [id])
-  vendor         vendors?      @relation(fields: [vendorId], references: [id])
-  memberships    organization_memberships[]
-  invitesSent    invites[]     @relation("InvitedBy")
-  refreshSessions refresh_sessions[]
-  notifications  notifications[]
-  auditLogs      audit_log[]
-  attachments    attachments[]
-  assignedWos    work_order_assignments[]
-  tasksAssigned  work_order_tasks[] @relation("TaskAssignee")
-  tasksCreated   work_order_tasks[] @relation("TaskCreator")
-  fieldTickets   field_tickets[]    @relation("TicketSubmitter")
-  ticketsSigned  field_tickets[]    @relation("TicketSigner")
-  paymentRequests payment_requests[] @relation("PrRequester")
-  prsVerified    payment_requests[] @relation("PrVerifier")
-  settlementsAuth owner_settlements[] @relation("SettlementAuthorizer")
-  scorecards     vendor_scorecards[]
-  reportsReleased reports[]
-  afpCreated     afp_lines[]
-  afeCreated     afes[]
+  organization     organizations @relation(fields: [organizationId], references: [id])
+  vendor           vendors?      @relation(fields: [vendorId], references: [id])
+  activeProgram    programs?     @relation("ActiveProgram", fields: [activeProgramId], references: [id])
+  memberships      organization_memberships[]
+  invitesSent      invites[]     @relation("InvitedBy")
+  refreshSessions  refresh_sessions[]
+  notifications    notifications[]
+  auditLogs        audit_log[]
+  attachments      attachments[]
+  assignedWos      work_order_assignments[]
+  tasksAssigned    work_order_tasks[] @relation("TaskAssignee")
+  tasksCreated     work_order_tasks[] @relation("TaskCreator")
+  fieldTickets     field_tickets[]    @relation("TicketSubmitter")
+  ticketsSigned    field_tickets[]    @relation("TicketSigner")
+  paymentRequests  payment_requests[] @relation("PrRequester")
+  prsVerified      payment_requests[] @relation("PrVerifier")
+  settlementsAuth  owner_settlements[] @relation("SettlementAuthorizer")
+  scorecards       vendor_scorecards[]
+  reportsReleased  reports[]
+  afpCreated       afp_lines[]
+  afeCreated       afes[]
 
   @@index([organizationId])
   @@index([role])
+  @@index([activeProgramId])
 }
 
 model organization_memberships {
@@ -283,6 +377,7 @@ model vendors {
 
 model afp_lines {
   id                  String    @id
+  programId           String
   year                Int
   operatingDiscipline String
   activity            String
@@ -296,14 +391,16 @@ model afp_lines {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
+  program             programs  @relation(fields: [programId], references: [id])
   createdBy           users     @relation(fields: [createdByUserId], references: [id])
   afes                afes[]
 
-  @@index([year, status])
+  @@index([programId, year, status])
 }
 
 model afes {
   id                    String    @id
+  programId             String
   afpLineId             String
   operatingDiscipline   String
   description           String
@@ -318,16 +415,18 @@ model afes {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
+  program               programs  @relation(fields: [programId], references: [id])
   afp                   afp_lines @relation(fields: [afpLineId], references: [id])
   createdBy             users     @relation(fields: [createdByUserId], references: [id])
   workOrders            work_orders[]
   contracts             vendor_contracts[]
 
-  @@index([status, band])
+  @@index([programId, status, band])
 }
 
 model work_orders {
   id                  String          @id
+  programId           String
   afeId               String
   category            String
   activity            String
@@ -342,6 +441,7 @@ model work_orders {
   createdAt           DateTime        @default(now())
   updatedAt           DateTime        @updatedAt
 
+  program             programs        @relation(fields: [programId], references: [id])
   afe                 afes            @relation(fields: [afeId], references: [id])
   assignedVendor      vendors?        @relation(fields: [assignedVendorId], references: [id])
   assignments         work_order_assignments[]
@@ -349,6 +449,8 @@ model work_orders {
   fieldTickets        field_tickets[]
   paymentRequests     payment_requests[]
   settlements         owner_settlements[]
+
+  @@index([programId, status])
 }
 
 model work_order_assignments {
@@ -381,6 +483,7 @@ model work_order_tasks {
 
 model field_tickets {
   id                String            @id
+  programId         String
   workOrderId       String
   submittedByUserId String
   activityRecorded  String
@@ -395,14 +498,18 @@ model field_tickets {
   paymentRequestId  String?
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
+  program           programs          @relation(fields: [programId], references: [id])
   workOrder         work_orders       @relation(fields: [workOrderId], references: [id])
   submittedBy       users             @relation("TicketSubmitter", fields: [submittedByUserId], references: [id])
   signedOffBy       users?            @relation("TicketSigner", fields: [signedOffByUserId], references: [id])
   paymentRequests   payment_requests[]
+
+  @@index([programId, status])
 }
 
 model payment_requests {
   id                  String               @id
+  programId           String
   workOrderId         String
   fieldTicketId       String
   requestedByUserId   String
@@ -416,15 +523,19 @@ model payment_requests {
   settlementId        String?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
+  program             programs             @relation(fields: [programId], references: [id])
   workOrder           work_orders          @relation(fields: [workOrderId], references: [id])
   fieldTicket         field_tickets        @relation(fields: [fieldTicketId], references: [id])
   requestedBy         users                @relation("PrRequester", fields: [requestedByUserId], references: [id])
   verifiedBy          users?               @relation("PrVerifier", fields: [spxVerifiedByUserId], references: [id])
   settlements         owner_settlements[]
+
+  @@index([programId, status])
 }
 
 model owner_settlements {
   id                 String           @id
+  programId          String
   workOrderId        String
   paymentRequestId   String
   type               SettlementType
@@ -436,9 +547,12 @@ model owner_settlements {
   status             SettlementStatus @default(draft)
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
+  program            programs         @relation(fields: [programId], references: [id])
   workOrder          work_orders      @relation(fields: [workOrderId], references: [id])
   paymentRequest     payment_requests @relation(fields: [paymentRequestId], references: [id])
   authorizedBy       users?           @relation("SettlementAuthorizer", fields: [authorizedByUserId], references: [id])
+
+  @@index([programId, status])
 }
 
 model vendor_contracts {
@@ -473,6 +587,7 @@ model vendor_scorecards {
 
 model spx_revenue_ledger {
   id             String               @id
+  programId      String
   period         String
   tier           RevenueTier
   feeDescription String
@@ -482,6 +597,9 @@ model spx_revenue_ledger {
   paymentStatus  InvoicePaymentStatus @default(invoiced)
   createdAt      DateTime             @default(now())
   updatedAt      DateTime             @updatedAt
+  program        programs             @relation(fields: [programId], references: [id])
+
+  @@index([programId, period])
 }
 
 model coa_mapping {
@@ -493,11 +611,13 @@ model coa_mapping {
 
 model gl_journal_exports {
   id                          String         @id
+  programId                   String
   period                      String
   status                      GlExportStatus @default(pending)
   restrictedAccessTokenIssued Boolean        @default(false)
   storageKey                  String?
   createdAt                   DateTime       @default(now())
+  program                     programs       @relation(fields: [programId], references: [id])
   lines                       gl_journal_export_lines[]
 }
 
@@ -513,57 +633,77 @@ model gl_journal_export_lines {
 }
 
 model schedule3_thresholds {
-  band           AfeBand  @id
+  programId      String
+  band           AfeBand
   minValueUsd    Decimal  @db.Decimal(14, 2)
   maxValueUsd    Decimal? @db.Decimal(14, 2)
   spxAuthority   String
   silvaAuthority String
   effectiveYear  Int
+  program        programs @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@id([programId, band])
 }
 
 model schedule4_insurance {
-  id                 String  @id
+  id                 String   @id
+  programId          String
   party              String
   coverageType       String
-  minimumCoverageUsd Decimal @db.Decimal(14, 2)
+  minimumCoverageUsd Decimal  @db.Decimal(14, 2)
   beneficiary        String
+  program            programs @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@index([programId])
 }
 
 model accountability_matrix {
-  operatingDiscipline String @id
+  programId           String
+  operatingDiscipline String
   executeRole         String
   validateRole        String
   decideRole          String
   authorRole          String
   schedule3Ref        String
+  program             programs @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@id([programId, operatingDiscipline])
 }
 
 model related_party_disclosures {
   id           String   @id
+  programId    String
   party        String
   relationship String
   period       String
   notes        String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  program      programs @relation(fields: [programId], references: [id], onDelete: Cascade)
 }
 
 model platform_config {
-  id                       String  @id @default("default")
-  fxRateEtbPerUsd          Decimal @db.Decimal(10, 4)
-  enhancedGovernanceActive Boolean @default(true)
+  programId                String   @id
+  fxRateEtbPerUsd          Decimal  @db.Decimal(10, 4)
+  enhancedGovernanceActive Boolean  @default(true)
+  program                  programs @relation(fields: [programId], references: [id], onDelete: Cascade)
 }
 
 model harvest_kpi_snapshots {
   id                          String   @id
-  year                        Int      @unique
+  programId                   String
+  year                        Int
   pickerProductivityCurrent   Decimal  @db.Decimal(10, 2)
   yieldTrendVsBaselinePercent Decimal  @db.Decimal(10, 2)
   createdAt                   DateTime @default(now())
+  program                     programs @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@unique([programId, year])
 }
 
 model reports {
   id               String       @id
+  programId        String
   type             ReportType
   period           String
   status           ReportStatus @default(draft)
@@ -573,11 +713,15 @@ model reports {
   releasedByUserId String?
   visibleToSilva   Boolean      @default(false)
   sections         Json?
+  program          programs     @relation(fields: [programId], references: [id])
   releasedBy       users?       @relation(fields: [releasedByUserId], references: [id])
+
+  @@index([programId, type, status])
 }
 
 model notifications {
   id              String   @id
+  programId       String?
   triggerType     String
   entityType      String
   entityId        String
@@ -586,11 +730,15 @@ model notifications {
   message         String
   sentAt          DateTime @default(now())
   acknowledged    Boolean  @default(false)
+  program         programs? @relation(fields: [programId], references: [id])
   recipient       users?   @relation(fields: [recipientUserId], references: [id])
+
+  @@index([programId])
 }
 
 model audit_log {
   id         String   @id
+  programId  String?
   userId     String?
   entityType String
   entityId   String
@@ -598,9 +746,11 @@ model audit_log {
   oldValue   Json?
   newValue   Json?
   timestamp  DateTime @default(now())
+  program    programs? @relation(fields: [programId], references: [id])
   user       users?   @relation(fields: [userId], references: [id])
 
   @@index([entityType, entityId])
+  @@index([programId])
 }
 
 model attachments {

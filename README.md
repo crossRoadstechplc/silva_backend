@@ -106,6 +106,11 @@ Integration tests require `DATABASE_URL` pointing at Postgres.
 3. No vendor→Silva raw field tickets
 4. Maker-checker — submitter cannot approve/validate/verify own work (`409 MAKER_CHECKER_VIOLATION`)
 
+## Scope & remaining work
+
+- Product scope: [`../PROJECT_SCOPE.md`](../PROJECT_SCOPE.md)
+- Remaining backlog (P0/P1/P2): [`../BACKLOG.md`](../BACKLOG.md)
+
 ## Project structure
 
 ```

@@ -8,13 +8,14 @@ const { revenueJson, reportJson, notificationJson, auditJson } = require("../uti
 const { isVendorRole, isSilvaRole, isSpxRole } = require("../utils/roles");
 const { signedUploadUrl, signedDownloadUrl } = require("../config/s3");
 const dashboard = require("./dashboard.service");
+const { scopedWhere, programCreateData, requireProgramId } = require("./utils/programScope");
 
 exports.listRevenue = async (query, user) => {
   if (user.role !== "spx_principal") {
     throw new AppError(403, "FIREWALL_VIOLATION", "SPX revenue ledger is not visible to this role.");
   }
   const { page, pageSize, skip, take } = parseListQuery(query);
-  const where = {};
+  const where = scopedWhere(user);
   if (query.period) where.period = query.period;
   if (query.tier) where.tier = query.tier;
   if (query.paymentStatus) where.paymentStatus = query.paymentStatus;
@@ -31,7 +32,7 @@ exports.createRevenue = async (dto, user) => {
   }
   const id = await nextTextId("inv", "INV");
   const row = await prisma.spx_revenue_ledger.create({
-    data: {
+    data: programCreateData(user, {
       id,
       period: dto.period,
       tier: dto.tier,
@@ -40,7 +41,7 @@ exports.createRevenue = async (dto, user) => {
       amountEtb: decimal(dto.amountEtb || 0),
       invoiceDate: new Date(`${dto.invoiceDate}T00:00:00.000Z`),
       paymentStatus: dto.paymentStatus || "invoiced",
-    },
+    }),
   });
   return revenueJson(row);
 };
@@ -49,7 +50,7 @@ exports.findRevenue = async (id, user) => {
   if (user.role !== "spx_principal") {
     throw new AppError(403, "FIREWALL_VIOLATION", "SPX revenue ledger is not visible to this role.");
   }
-  const row = await prisma.spx_revenue_ledger.findUnique({ where: { id } });
+  const row = await prisma.spx_revenue_ledger.findFirst({ where: scopedWhere(user, { id }) });
   if (!row) throw new AppError(404, "NOT_FOUND", "Ledger entry not found.");
   return revenueJson(row);
 };
@@ -58,7 +59,7 @@ exports.updateRevenue = async (id, dto, user) => {
   if (user.role !== "spx_principal") {
     throw new AppError(403, "FIREWALL_VIOLATION", "SPX revenue ledger is not visible to this role.");
   }
-  const row = await prisma.spx_revenue_ledger.findUnique({ where: { id } });
+  const row = await prisma.spx_revenue_ledger.findFirst({ where: scopedWhere(user, { id }) });
   if (!row) throw new AppError(404, "NOT_FOUND", "Ledger entry not found.");
   const updated = await prisma.spx_revenue_ledger.update({
     where: { id },
@@ -76,7 +77,7 @@ exports.exportRevenue = async (id, user) => {
   if (user.role !== "spx_principal") {
     throw new AppError(403, "FIREWALL_VIOLATION", "SPX revenue ledger is not visible to this role.");
   }
-  const row = await prisma.spx_revenue_ledger.findUnique({ where: { id } });
+  const row = await prisma.spx_revenue_ledger.findFirst({ where: scopedWhere(user, { id }) });
   if (!row) throw new AppError(404, "NOT_FOUND", "Ledger entry not found.");
   return {
     exportId: uuid("rlex"),
@@ -88,20 +89,25 @@ exports.exportRevenue = async (id, user) => {
 exports.budgetVsActual = async (query, user) => {
   if (isVendorRole(user.role)) throw new AppError(403, "FORBIDDEN", "Vendors cannot access budget vs actual.");
   const year = Number(query.year) || new Date().getUTCFullYear();
+  const programId = requireProgramId(user);
   const { page, pageSize, skip, take } = parseListQuery({ ...query, pageSize: query.pageSize || 50 });
-  const where = { year };
+  const where = scopedWhere(user, { year });
   const [lines, total] = await Promise.all([
     prisma.afp_lines.findMany({ where, skip, take, orderBy: { id: "asc" } }),
     prisma.afp_lines.count({ where }),
   ]);
-  const fx = await dashboard.fxRate();
+  const fx = await dashboard.fxRate(programId);
   const items = [];
   for (const line of lines) {
-    const afes = await prisma.afes.findMany({ where: { afpLineId: line.id, status: { notIn: ["rejected"] } } });
+    const afes = await prisma.afes.findMany({
+      where: { programId, afpLineId: line.id, status: { notIn: ["rejected"] } },
+    });
     const committedUsd = afes.reduce((s, a) => s + Number(a.estimatedCostUsd), 0);
-    const wos = await prisma.work_orders.findMany({ where: { afeId: { in: afes.map((a) => a.id) } } });
+    const wos = await prisma.work_orders.findMany({
+      where: { programId, afeId: { in: afes.map((a) => a.id) } },
+    });
     const settlements = await prisma.owner_settlements.findMany({
-      where: { workOrderId: { in: wos.map((w) => w.id) }, status: "settled" },
+      where: { programId, workOrderId: { in: wos.map((w) => w.id) }, status: "settled" },
     });
     const actualUsd = settlements.reduce((s, st) => s + Number(st.amountEtb) / fx, 0);
     const utilizationPercent = Number(line.budgetAllocatedUsd)
@@ -124,7 +130,7 @@ exports.budgetSummary = async (query, user) => {
   if (isVendorRole(user.role)) throw new AppError(403, "FORBIDDEN", "Vendors cannot access budget vs actual.");
   const year = Number(query.year) || new Date().getUTCFullYear();
   const { items } = await exports.budgetVsActual({ year, pageSize: 100 }, user);
-  const fx = await dashboard.fxRate();
+  const fx = await dashboard.fxRate(requireProgramId(user));
   return {
     year,
     totalBudgetUsd: money(items.reduce((s, i) => s + i.budgetAllocatedUsd, 0)),
@@ -137,9 +143,10 @@ exports.budgetSummary = async (query, user) => {
 
 exports.patchBudgetConfig = async (dto, user) => {
   if (user.role !== "spx_principal") throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
+  const programId = requireProgramId(user);
   await prisma.platform_config.upsert({
-    where: { id: "default" },
-    create: { id: "default", fxRateEtbPerUsd: decimal(dto.fxRateEtbPerUsd), enhancedGovernanceActive: true },
+    where: { programId },
+    create: { programId, fxRateEtbPerUsd: decimal(dto.fxRateEtbPerUsd), enhancedGovernanceActive: true },
     update: { fxRateEtbPerUsd: decimal(dto.fxRateEtbPerUsd) },
   });
   return exports.budgetSummary({ year: new Date().getUTCFullYear() }, user);
@@ -148,7 +155,7 @@ exports.patchBudgetConfig = async (dto, user) => {
 exports.listReports = async (query, user) => {
   if (isVendorRole(user.role)) throw new AppError(403, "FORBIDDEN", "Vendors cannot access reports.");
   const { page, pageSize, skip, take, statuses } = parseListQuery(query);
-  const where = {};
+  const where = scopedWhere(user);
   if (isSilvaRole(user.role)) {
     where.status = "released";
     where.visibleToSilva = true;
@@ -165,8 +172,9 @@ exports.listReports = async (query, user) => {
 
 exports.generateReport = async (type, dto, user) => {
   if (!isSpxRole(user.role)) throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
+  const programId = requireProgramId(user);
   if (type === "quarterly") {
-    const cfg = await prisma.platform_config.findUnique({ where: { id: "default" } });
+    const cfg = await prisma.platform_config.findUnique({ where: { programId } });
     if (cfg && !cfg.enhancedGovernanceActive) {
       throw new AppError(422, "BUSINESS_RULE_VIOLATION", "Quarterly reports require Enhanced Governance.");
     }
@@ -174,19 +182,19 @@ exports.generateReport = async (type, dto, user) => {
   const period = dto.period || dto.periodStart || new Date().toISOString().slice(0, 7);
   const { items } = await exports.budgetVsActual({ year: Number(String(period).slice(0, 4)), pageSize: 100 }, user);
   const row = await prisma.reports.create({
-    data: {
+    data: programCreateData(user, {
       id: `rpt_${String(period).replace(/-/g, "_")}_${type}`,
       type,
       period: String(period),
       status: "draft",
       sections: { budget_vs_actual: items },
-    },
+    }),
   });
   return reportJson(row);
 };
 
 exports.findReport = async (id, user) => {
-  const row = await prisma.reports.findUnique({ where: { id } });
+  const row = await prisma.reports.findFirst({ where: scopedWhere(user, { id }) });
   if (!row) throw new AppError(404, "NOT_FOUND", "Report not found.");
   if (isSilvaRole(user.role) && !(row.status === "released" && row.visibleToSilva)) {
     throw new AppError(404, "NOT_FOUND", "Report not found.");
@@ -204,7 +212,7 @@ exports.findReport = async (id, user) => {
 
 exports.patchNarrative = async (id, narrative, user) => {
   if (!isSpxRole(user.role)) throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
-  const row = await prisma.reports.findUnique({ where: { id } });
+  const row = await prisma.reports.findFirst({ where: scopedWhere(user, { id }) });
   if (!row) throw new AppError(404, "NOT_FOUND", "Report not found.");
   const updated = await prisma.reports.update({ where: { id }, data: { narrative } });
   return reportJson(updated);
@@ -214,7 +222,7 @@ exports.releaseReport = async (id, user) => {
   if (!["spx_principal", "spx_account_handler"].includes(user.role)) {
     throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
   }
-  const row = await prisma.reports.findUnique({ where: { id } });
+  const row = await prisma.reports.findFirst({ where: scopedWhere(user, { id }) });
   if (!row) throw new AppError(404, "NOT_FOUND", "Report not found.");
   if (row.status === "released") return reportJson(row);
   if (!row.narrative) {
@@ -255,10 +263,16 @@ exports.patchCoa = async (id, dto, user) => {
 };
 
 exports.listGlExports = async (user) => {
-  if (!isSpxRole(user.role) && !user.restrictedExport) {
+  if (user.role === "restricted_export") {
+    throw new AppError(403, "FIREWALL_VIOLATION", "Restricted export credential can only fetch a single export.");
+  }
+  if (!isSpxRole(user.role)) {
     throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
   }
-  const rows = await prisma.gl_journal_exports.findMany({ orderBy: { createdAt: "desc" } });
+  const rows = await prisma.gl_journal_exports.findMany({
+    where: scopedWhere(user),
+    orderBy: { createdAt: "desc" },
+  });
   return rows.map((r) => ({
     id: r.id,
     period: r.period,
@@ -270,11 +284,14 @@ exports.listGlExports = async (user) => {
 
 exports.generateGlExport = async (dto, user) => {
   if (!isSpxRole(user.role)) throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
-  const settlements = await prisma.owner_settlements.findMany({ where: { status: "settled" } });
+  const programId = requireProgramId(user);
+  const settlements = await prisma.owner_settlements.findMany({
+    where: { programId, status: "settled" },
+  });
   const mappings = await prisma.coa_mapping.findMany();
   const account = mappings[0]?.glAccount || "6100-Field Operations";
   const exp = await prisma.gl_journal_exports.create({
-    data: {
+    data: programCreateData(user, {
       id: uuid("glx"),
       period: dto.period,
       status: "ready",
@@ -289,7 +306,7 @@ exports.generateGlExport = async (dto, user) => {
           memo: `${s.id} ${s.payee}`,
         })),
       },
-    },
+    }),
   });
   return {
     id: exp.id,
@@ -301,9 +318,15 @@ exports.generateGlExport = async (dto, user) => {
 };
 
 exports.findGlExport = async (id, user, restricted) => {
-  const row = await prisma.gl_journal_exports.findUnique({ where: { id }, include: { lines: true } });
+  const isRestricted = restricted || user.role === "restricted_export";
+  const row = isRestricted
+    ? await prisma.gl_journal_exports.findUnique({ where: { id }, include: { lines: true } })
+    : await prisma.gl_journal_exports.findFirst({
+        where: scopedWhere(user, { id }),
+        include: { lines: true },
+      });
   if (!row) throw new AppError(404, "NOT_FOUND", "Export not found.");
-  if (restricted) {
+  if (isRestricted) {
     return {
       id: row.id,
       period: row.period,
@@ -316,6 +339,9 @@ exports.findGlExport = async (id, user, restricted) => {
       })),
     };
   }
+  if (isSilvaRole(user.role) || isVendorRole(user.role)) {
+    throw new AppError(403, "FIREWALL_VIOLATION", "GL journal export is only available via restricted export credential or SPX.");
+  }
   if (!isSpxRole(user.role)) throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
   return {
     id: row.id,
@@ -326,15 +352,22 @@ exports.findGlExport = async (id, user, restricted) => {
   };
 };
 
-exports.listAccountability = async () => prisma.accountability_matrix.findMany({ orderBy: { operatingDiscipline: "asc" } });
+exports.listAccountability = async (user) =>
+  prisma.accountability_matrix.findMany({
+    where: scopedWhere(user),
+    orderBy: { operatingDiscipline: "asc" },
+  });
 
 exports.patchAccountability = async (operatingDiscipline, dto, user) => {
   if (user.role !== "spx_principal") throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
+  const programId = requireProgramId(user);
   const decoded = decodeURIComponent(operatingDiscipline);
-  const existing = await prisma.accountability_matrix.findUnique({ where: { operatingDiscipline: decoded } });
+  const existing = await prisma.accountability_matrix.findUnique({
+    where: { programId_operatingDiscipline: { programId, operatingDiscipline: decoded } },
+  });
   if (!existing) throw new AppError(404, "NOT_FOUND", "Matrix row not found.");
   return prisma.accountability_matrix.update({
-    where: { operatingDiscipline: decoded },
+    where: { programId_operatingDiscipline: { programId, operatingDiscipline: decoded } },
     data: {
       executeRole: dto.executeRole ?? existing.executeRole,
       validateRole: dto.validateRole ?? existing.validateRole,
@@ -345,8 +378,11 @@ exports.patchAccountability = async (operatingDiscipline, dto, user) => {
   });
 };
 
-exports.listSchedule3 = async () => {
-  const rows = await prisma.schedule3_thresholds.findMany({ orderBy: { minValueUsd: "asc" } });
+exports.listSchedule3 = async (user) => {
+  const rows = await prisma.schedule3_thresholds.findMany({
+    where: scopedWhere(user),
+    orderBy: { minValueUsd: "asc" },
+  });
   return rows.map((r) => ({
     band: r.band,
     minValueUsd: Number(r.minValueUsd),
@@ -359,10 +395,13 @@ exports.listSchedule3 = async () => {
 
 exports.patchSchedule3 = async (band, dto, user) => {
   if (user.role !== "spx_principal") throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
-  const existing = await prisma.schedule3_thresholds.findUnique({ where: { band } });
+  const programId = requireProgramId(user);
+  const existing = await prisma.schedule3_thresholds.findUnique({
+    where: { programId_band: { programId, band } },
+  });
   if (!existing) throw new AppError(404, "NOT_FOUND", "Band not found.");
   const updated = await prisma.schedule3_thresholds.update({
-    where: { band },
+    where: { programId_band: { programId, band } },
     data: {
       minValueUsd: dto.minValueUsd !== undefined ? decimal(dto.minValueUsd) : undefined,
       maxValueUsd: dto.maxValueUsd === undefined ? undefined : dto.maxValueUsd === null ? null : decimal(dto.maxValueUsd),
@@ -381,8 +420,8 @@ exports.patchSchedule3 = async (band, dto, user) => {
   };
 };
 
-exports.listSchedule4 = async () => {
-  const rows = await prisma.schedule4_insurance.findMany();
+exports.listSchedule4 = async (user) => {
+  const rows = await prisma.schedule4_insurance.findMany({ where: scopedWhere(user) });
   return rows.map((r) => ({
     id: r.id,
     party: r.party,
@@ -394,7 +433,7 @@ exports.listSchedule4 = async () => {
 
 exports.patchSchedule4 = async (ruleId, dto, user) => {
   if (user.role !== "spx_principal") throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
-  const existing = await prisma.schedule4_insurance.findUnique({ where: { id: ruleId } });
+  const existing = await prisma.schedule4_insurance.findFirst({ where: scopedWhere(user, { id: ruleId }) });
   if (!existing) throw new AppError(404, "NOT_FOUND", "Rule not found.");
   const updated = await prisma.schedule4_insurance.update({
     where: { id: ruleId },
@@ -417,9 +456,10 @@ exports.patchSchedule4 = async (ruleId, dto, user) => {
 exports.listDisclosures = async (query, user) => {
   if (isVendorRole(user.role)) throw new AppError(403, "FORBIDDEN", "Vendors cannot access related-party disclosures.");
   const { page, pageSize, skip, take } = parseListQuery(query);
+  const where = scopedWhere(user);
   const [rows, total] = await Promise.all([
-    prisma.related_party_disclosures.findMany({ skip, take, orderBy: { createdAt: "desc" } }),
-    prisma.related_party_disclosures.count(),
+    prisma.related_party_disclosures.findMany({ where, skip, take, orderBy: { createdAt: "desc" } }),
+    prisma.related_party_disclosures.count({ where }),
   ]);
   return {
     items: rows.map((r) => ({
@@ -437,7 +477,13 @@ exports.listDisclosures = async (query, user) => {
 exports.createDisclosure = async (dto, user) => {
   if (!isSpxRole(user.role)) throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
   const row = await prisma.related_party_disclosures.create({
-    data: { id: uuid("rpd"), party: dto.party, relationship: dto.relationship, period: dto.period, notes: dto.notes ?? null },
+    data: programCreateData(user, {
+      id: uuid("rpd"),
+      party: dto.party,
+      relationship: dto.relationship,
+      period: dto.period,
+      notes: dto.notes ?? null,
+    }),
   });
   return {
     id: row.id,
@@ -451,7 +497,7 @@ exports.createDisclosure = async (dto, user) => {
 
 exports.patchDisclosure = async (id, dto, user) => {
   if (!isSpxRole(user.role)) throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
-  const existing = await prisma.related_party_disclosures.findUnique({ where: { id } });
+  const existing = await prisma.related_party_disclosures.findFirst({ where: scopedWhere(user, { id }) });
   if (!existing) throw new AppError(404, "NOT_FOUND", "Disclosure not found.");
   const row = await prisma.related_party_disclosures.update({
     where: { id },
@@ -472,10 +518,31 @@ exports.patchDisclosure = async (id, dto, user) => {
   };
 };
 
-exports.listNotifications = dashboard.notifications;
+exports.listNotifications = async (user, query) => {
+  const { page, pageSize, skip, take } = parseListQuery(query);
+  const programId = requireProgramId(user);
+  const where = {
+    programId,
+    OR: [{ recipientUserId: user.id }, { recipientRole: user.role, recipientUserId: null }],
+  };
+  if (query.acknowledged === "true") where.acknowledged = true;
+  if (query.acknowledged === "false") where.acknowledged = false;
+  if (query.triggerType) where.triggerType = query.triggerType;
+  const [rows, total] = await Promise.all([
+    prisma.notifications.findMany({ where, skip, take, orderBy: { sentAt: "desc" } }),
+    prisma.notifications.count({ where }),
+  ]);
+  return { items: rows.map(notificationJson), meta: meta(page, pageSize, total) };
+};
 
 exports.acknowledgeNotification = async (id, user) => {
-  const row = await prisma.notifications.findUnique({ where: { id } });
+  const row = await prisma.notifications.findFirst({
+    where: {
+      id,
+      programId: requireProgramId(user),
+      OR: [{ recipientUserId: user.id }, { recipientRole: user.role, recipientUserId: null }],
+    },
+  });
   if (!row) throw new AppError(404, "NOT_FOUND", "Notification not found.");
   const updated = await prisma.notifications.update({ where: { id }, data: { acknowledged: true } });
   return notificationJson(updated);

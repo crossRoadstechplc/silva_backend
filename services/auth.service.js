@@ -7,6 +7,13 @@ const { uuid, hashToken, rawToken } = require("../utils/ids");
 const { userJson, organizationJson, inviteJson } = require("../utils/serializers");
 const { isVendorRole, VENDOR_ROLES, SYSTEM_ROLES, permissionsFor } = require("../utils/roles");
 const { parseListQuery, meta } = require("../utils/helpers");
+const programService = require("./program.service");
+
+function adminRoleForOrgType(type) {
+  if (type === "silva") return "silva_owner";
+  if (type === "spx") return "spx_principal";
+  return "vendor_admin";
+}
 
 function signAccess(user) {
   return jwt.sign(
@@ -16,6 +23,7 @@ function signAccess(user) {
       role: user.role,
       organizationId: user.organizationId,
       organizationType: user.organization?.type,
+      activeProgramId: user.activeProgramId || null,
       typ: "access",
     },
     env.JWT_SECRET,
@@ -48,14 +56,81 @@ async function tokenBundle(user) {
   };
 }
 
+exports.reissueTokens = async (userId) => {
+  const user = await prisma.users.findUnique({ where: { id: userId } });
+  if (!user || !user.active) throw new AppError(401, "UNAUTHENTICATED", "Invalid user.");
+  return tokenBundle(user);
+};
+
 exports.login = async (email, password) => {
   const user = await prisma.users.findUnique({
     where: { email: email.toLowerCase() },
     include: { organization: true },
   });
   if (!user || !user.active) throw new AppError(401, "UNAUTHENTICATED", "Invalid email or password.");
+  if (user.organization?.status === "suspended") {
+    throw new AppError(403, "FORBIDDEN", "Organization is suspended.");
+  }
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) throw new AppError(401, "UNAUTHENTICATED", "Invalid email or password.");
+  return tokenBundle(user);
+};
+
+exports.signup = async (dto) => {
+  const email = String(dto.email).toLowerCase();
+  const existing = await prisma.users.findUnique({ where: { email } });
+  if (existing) throw new AppError(409, "CONFLICT", "Email already registered.");
+  const slug = programService.slugify(dto.orgSlug || dto.orgName);
+  if (!slug) throw new AppError(400, "VALIDATION_ERROR", "Organization name is required.");
+  const slugTaken = await prisma.organizations.findUnique({ where: { slug } });
+  if (slugTaken) throw new AppError(409, "CONFLICT", "Organization slug already taken.");
+
+  const orgType = dto.orgType;
+  if (!["silva", "spx", "vendor"].includes(orgType)) {
+    throw new AppError(400, "VALIDATION_ERROR", "orgType must be silva, spx, or vendor.");
+  }
+  const role = adminRoleForOrgType(orgType);
+  const orgId = uuid("org");
+  const userId = uuid("usr");
+  const passwordHash = await bcrypt.hash(dto.password, env.BCRYPT_ROUNDS);
+
+  const org = await prisma.organizations.create({
+    data: {
+      id: orgId,
+      name: dto.orgName,
+      slug,
+      displayName: dto.displayName || dto.orgName,
+      type: orgType,
+      brandingJson: dto.branding || { tagline: "" },
+      vendor:
+        orgType === "vendor"
+          ? {
+              create: {
+                id: uuid("vnd"),
+                name: dto.orgName,
+                category: dto.vendorCategory || "Field Operations",
+                status: "active",
+              },
+            }
+          : undefined,
+    },
+    include: { vendor: true },
+  });
+
+  const user = await prisma.users.create({
+    data: {
+      id: userId,
+      name: dto.name,
+      email,
+      passwordHash,
+      role,
+      organizationId: org.id,
+      vendorId: org.vendor?.id || null,
+      memberships: { create: { id: uuid("mem"), organizationId: org.id, role } },
+    },
+    include: { organization: true },
+  });
+
   return tokenBundle(user);
 };
 
@@ -92,10 +167,29 @@ exports.refresh = async (refreshToken) => {
 exports.me = async (user) => {
   const full = await prisma.users.findUnique({
     where: { id: user.id },
-    include: { organization: true, memberships: true },
+    include: { organization: true, memberships: true, activeProgram: true },
   });
+  const programs = await programService.listPrograms({ organizationId: full.organizationId });
   return {
     user: userJson(full),
+    tenant: {
+      id: full.organization.id,
+      name: full.organization.name,
+      slug: full.organization.slug,
+      displayName: full.organization.displayName || full.organization.name,
+      type: full.organization.type,
+      branding: full.organization.brandingJson || null,
+      status: full.organization.status,
+    },
+    activeProgram: full.activeProgram
+      ? {
+          id: full.activeProgram.id,
+          name: full.activeProgram.name,
+          slug: full.activeProgram.slug,
+          branding: full.activeProgram.brandingJson || null,
+        }
+      : null,
+    programs,
     memberships: full.memberships.map((m) => ({
       id: m.id,
       userId: m.userId,
@@ -166,8 +260,11 @@ exports.createOrganization = async (user, dto) => {
     data: {
       id: uuid("org"),
       name: dto.name,
+      slug: programService.slugify(dto.slug || dto.name),
+      displayName: dto.displayName || dto.name,
       type: dto.type,
       isDefaultExecutionPartner: Boolean(dto.isDefaultExecutionPartner),
+      brandingJson: dto.branding || null,
     },
   });
   let vendor = null;
@@ -364,12 +461,32 @@ exports.createUser = async (user, dto) => {
 exports.patchUser = async (user, userId, dto) => {
   const found = await prisma.users.findUnique({ where: { id: userId } });
   if (!found) throw new AppError(404, "NOT_FOUND", "User not found.");
+  const isSelf = user.id === userId;
+  const isAdmin = ["spx_principal", "system_admin", "vendor_admin"].includes(user.role);
+  if (!isSelf && !isAdmin) {
+    throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
+  }
+  if (user.role === "vendor_admin" && !isSelf && found.vendorId !== user.vendorId) {
+    throw new AppError(404, "NOT_FOUND", "User not found.");
+  }
   const updated = await prisma.users.update({
     where: { id: userId },
     data: { name: dto.name ?? found.name, email: dto.email ? dto.email.toLowerCase() : found.email },
     include: { organization: true },
   });
   return userJson(updated);
+};
+
+exports.changePassword = async (user, dto) => {
+  const found = await prisma.users.findUnique({ where: { id: user.id } });
+  if (!found) throw new AppError(404, "NOT_FOUND", "User not found.");
+  const ok = await bcrypt.compare(dto.currentPassword, found.passwordHash);
+  if (!ok) throw new AppError(400, "INVALID_CREDENTIALS", "Current password is incorrect.");
+  await prisma.users.update({
+    where: { id: user.id },
+    data: { passwordHash: await bcrypt.hash(dto.newPassword, 10) },
+  });
+  return { ok: true };
 };
 
 exports.setUserActive = async (user, userId, active) => {

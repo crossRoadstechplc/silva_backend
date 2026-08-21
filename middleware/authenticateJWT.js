@@ -5,6 +5,7 @@ const AppError = require("../utils/AppError");
 
 const PUBLIC = new Set([
   "POST /auth/login",
+  "POST /auth/signup",
   "POST /auth/refresh",
   "POST /auth/password/forgot",
   "POST /auth/password/reset",
@@ -78,6 +79,8 @@ module.exports = async (req, res, next) => {
       organizationType: user.organization.type,
       vendorId: user.vendorId,
       organization: user.organization,
+      activeProgramId: user.activeProgramId || null,
+      tenantOrgId: user.organizationId,
     };
     next();
   } catch (err) {

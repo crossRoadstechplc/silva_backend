@@ -4,6 +4,7 @@ const { uuid, nextTextId } = require("../utils/ids");
 const { parseListQuery, meta } = require("../utils/helpers");
 const { workOrderJson, assignmentJson, taskJson } = require("../utils/serializers");
 const { isVendorRole, isSpxRole } = require("../utils/roles");
+const { scopedWhere, programCreateData, requireProgramId } = require("./utils/programScope");
 
 async function defaultVendor() {
   return prisma.vendors.findFirst({ where: { isDefaultExecutionPartner: true } });
@@ -15,8 +16,8 @@ async function resolveVendorName(wo) {
   return def ? def.name : null;
 }
 
-async function scopedWhere(user, extra = {}) {
-  const where = { ...extra };
+async function scopedWhereWo(user, extra = {}) {
+  const where = scopedWhere(user, extra);
   if (isVendorRole(user.role)) {
     const def = await defaultVendor();
     const vendorId = user.vendorId;
@@ -27,7 +28,7 @@ async function scopedWhere(user, extra = {}) {
 
 exports.findAll = async (query, user) => {
   const { page, pageSize, skip, take, statuses } = parseListQuery(query);
-  const where = await scopedWhere(user);
+  const where = await scopedWhereWo(user);
   if (statuses.length) where.status = { in: statuses };
   if (query.afeId) where.afeId = query.afeId;
   if (query.assignedVendorId) where.assignedVendorId = query.assignedVendorId;
@@ -50,16 +51,11 @@ exports.findAll = async (query, user) => {
 };
 
 exports.findOne = async (id, user) => {
-  const wo = await prisma.work_orders.findUnique({
-    where: { id },
+  const wo = await prisma.work_orders.findFirst({
+    where: await scopedWhereWo(user, { id }),
     include: { assignedVendor: true, assignments: true, tasks: true, fieldTickets: true },
   });
   if (!wo) throw new AppError(404, "NOT_FOUND", "Work order not found.");
-  if (isVendorRole(user.role)) {
-    const def = await defaultVendor();
-    const allowed = wo.assignedVendorId === user.vendorId || (!wo.assignedVendorId && def && def.id === user.vendorId);
-    if (!allowed) throw new AppError(404, "NOT_FOUND", "Work order not found.");
-  }
   return workOrderJson(wo, {
     assignedVendorName: await resolveVendorName(wo),
     assignmentCount: wo.assignments.filter((a) => a.active).length,
@@ -69,14 +65,15 @@ exports.findOne = async (id, user) => {
 };
 
 exports.create = async (dto, user) => {
-  const afe = await prisma.afes.findUnique({ where: { id: dto.afeId } });
+  const programId = requireProgramId(user);
+  const afe = await prisma.afes.findFirst({ where: { id: dto.afeId, programId } });
   if (!afe) throw new AppError(404, "NOT_FOUND", "AFE not found");
   if (!["approved", "active"].includes(afe.status)) {
     throw new AppError(422, "BUSINESS_RULE_VIOLATION", "Work Order must trace to an approved AFE.");
   }
   const id = await nextTextId("wo", "WO");
   const wo = await prisma.work_orders.create({
-    data: {
+    data: programCreateData(user, {
       id,
       afeId: dto.afeId,
       category: dto.category,
@@ -88,7 +85,7 @@ exports.create = async (dto, user) => {
       spxOversightHoursL2: dto.spxOversightHoursL2 || 0,
       spxOversightHoursL3: dto.spxOversightHoursL3 || 0,
       assignedVendorId: dto.assignedVendorId ?? null,
-    },
+    }),
     include: { assignedVendor: true },
   });
   return workOrderJson(wo, { assignedVendorName: await resolveVendorName(wo) });
@@ -125,12 +122,32 @@ async function transition(id, from, to) {
 }
 
 exports.issue = async (id, user) => {
-  const wo = await prisma.work_orders.findUnique({ where: { id }, include: { afe: { include: { afp: true } } } });
+  const wo = await prisma.work_orders.findUnique({
+    where: { id },
+    include: { afe: { include: { afp: true } }, assignedVendor: true },
+  });
   if (!wo) throw new AppError(404, "NOT_FOUND", "Work order not found.");
   if (wo.status === "issued") {
     const full = await prisma.work_orders.findUnique({ where: { id }, include: { assignedVendor: true } });
     return workOrderJson(full, { assignedVendorName: await resolveVendorName(full) });
   }
+
+  const vendor =
+    wo.assignedVendor ||
+    (await defaultVendor());
+  if (vendor) {
+    const expired =
+      !vendor.insuranceOnFile ||
+      (vendor.insuranceExpiry && vendor.insuranceExpiry < new Date());
+    if (expired) {
+      throw new AppError(
+        422,
+        "BUSINESS_RULE_VIOLATION",
+        `Cannot issue work order: insurance for ${vendor.name} is missing or expired (Schedule 4).`,
+      );
+    }
+  }
+
   const updated = await transition(id, "draft", "issued");
   if (wo.afe.status === "approved") {
     await prisma.afes.update({ where: { id: wo.afeId }, data: { status: "active" } });

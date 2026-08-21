@@ -6,9 +6,10 @@ const { decimal, parseListQuery, meta } = require("../utils/helpers");
 const { afeJson, auditJson } = require("../utils/serializers");
 const { isVendorRole, isSpxRole } = require("../utils/roles");
 const { createNotification } = require("../jobs/queues");
+const { scopedWhere, programCreateData, requireProgramId } = require("./utils/programScope");
 
-async function getThresholds() {
-  const rows = await prisma.schedule3_thresholds.findMany();
+async function getThresholds(programId) {
+  const rows = await prisma.schedule3_thresholds.findMany({ where: { programId } });
   return rows.length
     ? rows
     : [
@@ -24,7 +25,7 @@ exports.findAll = async (query, user) => {
     throw new AppError(403, "FORBIDDEN", "Vendors cannot access AFE register");
   }
   const { page, pageSize, skip, take, statuses } = parseListQuery(query);
-  const where = {};
+  const where = scopedWhere(user);
   if (statuses.length) where.status = { in: statuses };
   if (query.band) where.band = query.band;
   if (query.afpLineId) where.afpLineId = query.afpLineId;
@@ -38,7 +39,7 @@ exports.findAll = async (query, user) => {
 };
 
 exports.findOne = async (id, user) => {
-  const afe = await prisma.afes.findUnique({ where: { id } });
+  const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }) });
   if (!afe) throw new AppError(404, "NOT_FOUND", "AFE not found");
   if (isVendorRole(user.role) && afe.createdByUserId !== user.id) {
     throw new AppError(404, "NOT_FOUND", "AFE not found");
@@ -47,14 +48,15 @@ exports.findOne = async (id, user) => {
 };
 
 exports.create = async (dto, user) => {
-  const afp = await prisma.afp_lines.findUnique({ where: { id: dto.afpLineId } });
+  const programId = requireProgramId(user);
+  const afp = await prisma.afp_lines.findFirst({ where: { id: dto.afpLineId, programId } });
   if (!afp) throw new AppError(404, "NOT_FOUND", "AFP line not found.");
-  const thresholds = await getThresholds();
+  const thresholds = await getThresholds(programId);
   const band = computeBand(dto.estimatedCostUsd, thresholds);
   const silvaApprovalRequired = band === "C" || band === "D";
   const id = await nextTextId("afe", "AFE");
   const afe = await prisma.afes.create({
-    data: {
+    data: programCreateData(user, {
       id,
       afpLineId: dto.afpLineId,
       operatingDiscipline: dto.operatingDiscipline,
@@ -63,20 +65,20 @@ exports.create = async (dto, user) => {
       band,
       silvaApprovalRequired,
       createdByUserId: user.id,
-    },
+    }),
   });
   return afeJson(afe);
 };
 
 exports.update = async (id, dto, user) => {
-  const afe = await prisma.afes.findUnique({ where: { id } });
+  const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }) });
   if (!afe) throw new AppError(404, "NOT_FOUND", "AFE not found");
   if (afe.status !== "draft") throw new AppError(400, "INVALID_STATE", "Only draft records can be edited.");
   if (isVendorRole(user.role) && afe.createdByUserId !== user.id) {
     throw new AppError(404, "NOT_FOUND", "AFE not found");
   }
   const cost = dto.estimatedCostUsd !== undefined ? dto.estimatedCostUsd : Number(afe.estimatedCostUsd);
-  const thresholds = await getThresholds();
+  const thresholds = await getThresholds(requireProgramId(user));
   const band = computeBand(cost, thresholds);
   const updated = await prisma.afes.update({
     where: { id },
@@ -92,7 +94,7 @@ exports.update = async (id, dto, user) => {
 };
 
 exports.submit = async (id, user) => {
-  const afe = await prisma.afes.findUnique({ where: { id } });
+  const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }) });
   if (!afe) throw new AppError(404, "NOT_FOUND", "AFE not found");
   if (afe.status === "submitted") return afeJson(afe);
   if (afe.status !== "draft") throw new AppError(400, "INVALID_STATE", "Workflow transition not allowed.");
@@ -101,7 +103,7 @@ exports.submit = async (id, user) => {
 };
 
 exports.validate = async (id, user) => {
-  const afe = await prisma.afes.findUnique({ where: { id } });
+  const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }) });
   if (!afe) throw new AppError(404, "NOT_FOUND", "AFE not found");
   if (["validated", "approved", "active"].includes(afe.status) && afe.spxValidated) return afeJson(afe);
   if (afe.status !== "submitted") throw new AppError(400, "INVALID_STATE", "AFE must be submitted to validate.");
@@ -118,20 +120,30 @@ exports.validate = async (id, user) => {
     where: { id },
     data: { status: nextStatus, spxValidated: true, silvaApproved: false, approvalDate },
   });
-  if (afe.band === "B" || afe.silvaApprovalRequired) {
+  if (afe.band === "B") {
     await createNotification({
+      programId: afe.programId,
       triggerType: "afe_pending",
       entityType: "afe",
       entityId: id,
       recipientRole: "silva_owner",
-      message: `${id} (${afe.band}) requires Silva attention.`,
+      message: `${id} Band B issued by SPX — Silva may object within 5 business days (silence is deemed approval).`,
+    });
+  } else if (afe.silvaApprovalRequired) {
+    await createNotification({
+      programId: afe.programId,
+      triggerType: "afe_pending",
+      entityType: "afe",
+      entityId: id,
+      recipientRole: "silva_owner",
+      message: `${id} (${afe.band}) requires Silva written approval before the AFE issues.`,
     });
   }
   return afeJson(updated);
 };
 
 exports.approve = async (id, user) => {
-  const afe = await prisma.afes.findUnique({ where: { id } });
+  const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }) });
   if (!afe) throw new AppError(404, "NOT_FOUND", "AFE not found");
   if (afe.status === "approved" || afe.status === "active") return afeJson(afe);
 
@@ -167,7 +179,7 @@ exports.approve = async (id, user) => {
 };
 
 exports.reject = async (id, reason, user) => {
-  const afe = await prisma.afes.findUnique({ where: { id } });
+  const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }) });
   if (!afe) throw new AppError(404, "NOT_FOUND", "AFE not found");
   if (afe.status === "rejected") return afeJson(afe);
   const issuedWo = await prisma.work_orders.findFirst({ where: { afeId: id, status: { not: "draft" } } });
@@ -187,7 +199,7 @@ exports.reject = async (id, reason, user) => {
 };
 
 exports.close = async (id, user) => {
-  const afe = await prisma.afes.findUnique({ where: { id } });
+  const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }) });
   if (!afe) throw new AppError(404, "NOT_FOUND", "AFE not found");
   if (afe.status === "closed") return afeJson(afe);
   if (!["approved", "active"].includes(afe.status)) {
@@ -198,7 +210,7 @@ exports.close = async (id, user) => {
 };
 
 exports.getHistory = async (id) => {
-  const afe = await prisma.afes.findUnique({ where: { id } });
+  const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }) });
   if (!afe) throw new AppError(404, "NOT_FOUND", "AFE not found");
   const rows = await prisma.audit_log.findMany({
     where: { entityType: "afe", entityId: id },

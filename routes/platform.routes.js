@@ -41,8 +41,11 @@ dashboardRoutes.get("/spx-management", requireRole(SPX), platform.spxManagement)
 dashboardRoutes.get("/vendor-field", platform.vendorField);
 dashboardRoutes.get("/notifications", platform.dashboardNotifications);
 
+const PRINCIPAL = ["spx_principal"];
+
 const revenueRoutes = express.Router();
 revenueRoutes.use(authenticateJWT);
+revenueRoutes.use(requireRole(PRINCIPAL));
 revenueRoutes.get("/", platform.listRevenue);
 revenueRoutes.post("/", validate(schemas.revenueCreate), auditLog("revenue_ledger"), platform.createRevenue);
 revenueRoutes.get("/:entryId", platform.findRevenue);
@@ -105,7 +108,7 @@ coaRoutes.patch("/:mappingId", requireRole(SPX), platform.patchCoa);
 
 const glRoutes = express.Router();
 glRoutes.use(authenticateJWT);
-glRoutes.get("/", platform.listGl);
+glRoutes.get("/", requireRole(SPX), platform.listGl);
 glRoutes.post("/generate", requireRole(SPX), platform.generateGl);
 glRoutes.get("/:exportId", platform.findGl);
 

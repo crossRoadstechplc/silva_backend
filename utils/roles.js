@@ -9,6 +9,132 @@ const VENDOR_ROLES = [
   "vendor_worker",
 ];
 
+/** Mirrors silva_frontend/src/mocks/permissions.ts — UI permission keys from /auth/me */
+const ROLE_PERMISSIONS = {
+  silva_owner: [
+    "afp.read",
+    "afp.approve",
+    "afe.read",
+    "afe.approve_band_c",
+    "afe.approve_band_d",
+    "work_orders.read",
+    "payment_requests.read_verified",
+    "settlements.read",
+    "reports.read_released",
+    "vendors.read_summary",
+    "dashboard.silva_owner",
+    "notifications.read",
+  ],
+  silva_country_manager: [
+    "afp.read",
+    "afp.approve",
+    "afe.read",
+    "afe.approve_band_c",
+    "afe.approve_band_d",
+    "work_orders.read",
+    "payment_requests.read_verified",
+    "settlements.read",
+    "reports.read_released",
+    "vendors.read_summary",
+    "dashboard.silva_owner",
+    "notifications.read",
+  ],
+  silva_finance: [
+    "afp.read",
+    "afe.read",
+    "work_orders.read",
+    "payment_requests.read_verified",
+    "settlements.read",
+    "settlements.mark_settled",
+    "reports.read_released",
+    "dashboard.silva_owner",
+    "notifications.read",
+  ],
+  spx_principal: [
+    "afp.read",
+    "afp.create",
+    "afp.close",
+    "afe.read",
+    "afe.create",
+    "afe.validate",
+    "afe.approve_band_a",
+    "afe.approve_band_b",
+    "work_orders.full",
+    "field_tickets.validate",
+    "payment_requests.verify",
+    "settlements.authorize",
+    "revenue_ledger.full",
+    "reports.release",
+    "vendors.manage",
+    "dashboard.spx_management",
+    "audit.read",
+    "notifications.read",
+  ],
+  spx_account_handler: [
+    "afp.read",
+    "afp.create",
+    "afe.read",
+    "afe.create",
+    "afe.validate",
+    "afe.approve_band_a",
+    "afe.approve_band_b",
+    "work_orders.create",
+    "work_orders.issue",
+    "field_tickets.validate",
+    "payment_requests.verify",
+    "settlements.authorize",
+    "reports.draft",
+    "vendors.manage",
+    "dashboard.spx_management",
+    "notifications.read",
+  ],
+  spx_field_supervisor: [
+    "afp.read",
+    "afe.read",
+    "work_orders.read",
+    "field_tickets.validate",
+    "dashboard.spx_management",
+    "notifications.read",
+  ],
+  system_admin: ["users.manage", "organizations.manage", "audit.read", "notifications.read"],
+  vendor_admin: [
+    "work_orders.read_own",
+    "users.invite",
+    "field_tickets.create",
+    "dashboard.vendor_field",
+    "notifications.read",
+  ],
+  vendor_manager: [
+    "work_orders.read_own",
+    "tasks.create",
+    "field_tickets.create",
+    "payment_requests.create",
+    "dashboard.vendor_field",
+    "notifications.read",
+  ],
+  vendor_supervisor: [
+    "work_orders.read_own",
+    "tasks.create",
+    "field_tickets.review",
+    "dashboard.vendor_field",
+    "notifications.read",
+  ],
+  vendor_field_lead: [
+    "work_orders.read_own",
+    "field_tickets.create",
+    "tasks.create",
+    "payment_requests.create",
+    "dashboard.vendor_field",
+    "notifications.read",
+  ],
+  vendor_worker: [
+    "work_orders.read_own",
+    "field_tickets.create",
+    "dashboard.vendor_field",
+    "notifications.read",
+  ],
+};
+
 function isVendorRole(role) {
   return VENDOR_ROLES.includes(role);
 }
@@ -24,21 +150,7 @@ function orgTypeOf(user) {
 }
 
 function permissionsFor(role) {
-  const perms = [];
-  if (isSilvaRole(role) || isSpxRole(role) || isVendorRole(role)) {
-    perms.push("afp.read", "work_orders.read", "notifications.read");
-  }
-  if (isSilvaRole(role) || isSpxRole(role)) {
-    perms.push("afe.read", "vendors.read", "bva.read", "reports.read", "settlements.read");
-  }
-  if (role === "silva_owner" || role === "silva_country_manager") {
-    perms.push("afp.approve", "afe.approve_band_c", "afe.approve_band_d");
-  }
-  if (isSpxRole(role)) {
-    perms.push("afp.create", "afe.create", "afe.validate", "work_orders.manage", "field_tickets.validate");
-  }
-  if (role === "spx_principal") perms.push("revenue.read", "revenue.write", "afp.close");
-  return perms;
+  return ROLE_PERMISSIONS[role] ?? [];
 }
 
 module.exports = {

@@ -1,0 +1,12 @@
+-- Org-as-tenant + Programs migration
+-- Apply via: prisma db push (dev) or migrate deploy after review.
+-- This file documents the intended delta; Prisma schema is source of truth.
+
+-- See schema.prisma for:
+-- organizations.slug, displayName, brandingJson, status
+-- programs, program_memberships, program_org_invites
+-- users.activeProgramId
+-- programId on afp_lines, afes, work_orders, field_tickets, payment_requests,
+-- owner_settlements, spx_revenue_ledger, reports, notifications, harvest_kpi_snapshots,
+-- audit_log, schedule3_thresholds, schedule4_insurance, accountability_matrix,
+-- related_party_disclosures, platform_config, gl_journal_exports

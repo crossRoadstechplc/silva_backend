@@ -9,6 +9,7 @@ const env = require("./config/env");
 const openapi = require("./docs/openapi.json");
 
 const authRoutes = require("./routes/auth.routes");
+const programRoutes = require("./routes/program.routes");
 const { orgRouter, inviteRouter, userRouter, membershipRouter } = require("./routes/identity.routes");
 const { afpRoutes, afeRoutes } = require("./routes/afe.routes");
 const {
@@ -49,32 +50,37 @@ app.get("/api/v1/health", (req, res) => res.json({ data: { ok: true } }));
 app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openapi));
 
 app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/programs", programRoutes);
 app.use("/api/v1/organizations", orgRouter);
 app.use("/api/v1/invites", inviteRouter);
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/memberships", membershipRouter);
-app.use("/api/v1/dashboard", dashboardRoutes);
-app.use("/api/v1/afp-lines", afpRoutes);
-app.use("/api/v1/afes", afeRoutes);
-app.use("/api/v1/work-orders", workOrderRoutes);
-app.use("/api/v1/work-order-tasks", taskRoutes);
-app.use("/api/v1/field-tickets", fieldTicketRoutes);
-app.use("/api/v1/payment-requests", paymentRequestRoutes);
-app.use("/api/v1/owner-settlements", settlementRoutes);
+
+const requireProgramAccess = require("./middleware/requireProgramAccess");
+const authenticateJWT = require("./middleware/authenticateJWT");
+const programScoped = [authenticateJWT, requireProgramAccess];
+app.use("/api/v1/dashboard", ...programScoped, dashboardRoutes);
+app.use("/api/v1/afp-lines", ...programScoped, afpRoutes);
+app.use("/api/v1/afes", ...programScoped, afeRoutes);
+app.use("/api/v1/work-orders", ...programScoped, workOrderRoutes);
+app.use("/api/v1/work-order-tasks", ...programScoped, taskRoutes);
+app.use("/api/v1/field-tickets", ...programScoped, fieldTicketRoutes);
+app.use("/api/v1/payment-requests", ...programScoped, paymentRequestRoutes);
+app.use("/api/v1/owner-settlements", ...programScoped, settlementRoutes);
 app.use("/api/v1/vendors", vendorRoutes);
 app.use("/api/v1/vendor-contracts", contractRoutes);
 app.use("/api/v1/vendor-scorecards", scorecardRoutes);
-app.use("/api/v1/budget-vs-actual", bvaRoutes);
-app.use("/api/v1/accountability-matrix", accountabilityRoutes);
-app.use("/api/v1/schedule3-thresholds", schedule3Routes);
-app.use("/api/v1/schedule4-insurance", schedule4Routes);
-app.use("/api/v1/revenue-ledger", revenueRoutes);
-app.use("/api/v1/reports", reportRoutes);
-app.use("/api/v1/notifications", notificationRoutes);
+app.use("/api/v1/budget-vs-actual", ...programScoped, bvaRoutes);
+app.use("/api/v1/accountability-matrix", ...programScoped, accountabilityRoutes);
+app.use("/api/v1/schedule3-thresholds", ...programScoped, schedule3Routes);
+app.use("/api/v1/schedule4-insurance", ...programScoped, schedule4Routes);
+app.use("/api/v1/revenue-ledger", ...programScoped, revenueRoutes);
+app.use("/api/v1/reports", ...programScoped, reportRoutes);
+app.use("/api/v1/notifications", ...programScoped, notificationRoutes);
 app.use("/api/v1/audit-log", auditRoutes);
-app.use("/api/v1/related-party-disclosures", disclosureRoutes);
+app.use("/api/v1/related-party-disclosures", ...programScoped, disclosureRoutes);
 app.use("/api/v1/coa-mapping", coaRoutes);
-app.use("/api/v1/gl-journal-exports", glRoutes);
+app.use("/api/v1/gl-journal-exports", ...programScoped, glRoutes);
 app.use("/api/v1/attachments", attachmentRoutes);
 
 app.use((req, res) => {

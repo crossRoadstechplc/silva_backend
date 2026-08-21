@@ -6,6 +6,25 @@ exports.login = catchAsync(async (req, res) => {
   res.json({ data });
 });
 
+exports.signup = catchAsync(async (req, res) => {
+  const data = await authService.signup(req.validatedBody);
+  res.status(201).json({ data });
+});
+
+exports.switchProgram = catchAsync(async (req, res) => {
+  const programService = require("../services/program.service");
+  const program = await programService.switchProgram(req.user, req.validatedBody.programId);
+  const tokens = await authService.reissueTokens(req.user.id);
+  const me = await authService.me({ id: req.user.id });
+  res.json({ data: { ...tokens, activeProgram: program, me } });
+});
+
+exports.updateTenantBranding = catchAsync(async (req, res) => {
+  const programService = require("../services/program.service");
+  const data = await programService.updateTenantBranding(req.user, req.validatedBody);
+  res.json({ data });
+});
+
 exports.logout = catchAsync(async (req, res) => {
   await authService.logout(req.user?.id, req.body?.refreshToken);
   res.json({ data: { ok: true } });
@@ -29,6 +48,11 @@ exports.forgot = catchAsync(async (req, res) => {
 exports.reset = catchAsync(async (req, res) => {
   await authService.resetPassword(req.validatedBody.token, req.validatedBody.password);
   res.json({ data: { ok: true } });
+});
+
+exports.changePassword = catchAsync(async (req, res) => {
+  const data = await authService.changePassword(req.user, req.validatedBody);
+  res.json({ data });
 });
 
 exports.listOrganizations = catchAsync(async (req, res) => {
