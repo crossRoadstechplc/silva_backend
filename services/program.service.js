@@ -32,6 +32,16 @@ const DEFAULT_SCHEDULE3 = [
   { band: "D", minValueUsd: 50001, maxValueUsd: null, spxAuthority: "Recommend", silvaAuthority: "Approve before issue", effectiveYear: new Date().getUTCFullYear() },
 ];
 
+const DEFAULT_RACI = [
+  { operatingDiscipline: "Agronomic Operations", executeRole: "Execution partner", validateRole: "SPX", decideRole: "SPX", authorRole: "SPX", schedule3Ref: "AFE Bands A-D" },
+  { operatingDiscipline: "Procurement & Tender", executeRole: "SPX", validateRole: "SPX", decideRole: "Silva (Band C/D)", authorRole: "SPX", schedule3Ref: "Procurement / tender" },
+  { operatingDiscipline: "Contractor Appointment", executeRole: "SPX", validateRole: "SPX", decideRole: "Silva", authorRole: "SPX", schedule3Ref: "Vendor appointment / removal" },
+  { operatingDiscipline: "Emergency / Stop-Work", executeRole: "Field / SPX", validateRole: "SPX", decideRole: "SPX (immediate)", authorRole: "SPX", schedule3Ref: "Safety override" },
+  { operatingDiscipline: "Hiring", executeRole: "Execution partner", validateRole: "SPX", decideRole: "SPX", authorRole: "SPX", schedule3Ref: "Labor controls" },
+  { operatingDiscipline: "Reporting Sign-Off", executeRole: "SPX", validateRole: "SPX Principal", decideRole: "SPX Principal", authorRole: "SPX", schedule3Ref: "Schedule 5 cadence" },
+  { operatingDiscipline: "Infrastructure", executeRole: "Vendor", validateRole: "SPX", decideRole: "Silva (Band C/D)", authorRole: "SPX", schedule3Ref: "AFE Bands C-D" },
+];
+
 async function cloneProgramDefaults(programId) {
   await prisma.schedule3_thresholds.createMany({
     data: DEFAULT_SCHEDULE3.map((row) => ({ ...row, programId })),
@@ -39,16 +49,8 @@ async function cloneProgramDefaults(programId) {
   await prisma.platform_config.create({
     data: { programId, fxRateEtbPerUsd: 57.2, enhancedGovernanceActive: true },
   });
-  await prisma.accountability_matrix.create({
-    data: {
-      programId,
-      operatingDiscipline: "Agronomic Operations",
-      executeRole: "Execution partner",
-      validateRole: "SPX",
-      decideRole: "SPX",
-      authorRole: "SPX",
-      schedule3Ref: "AFE Bands A-D",
-    },
+  await prisma.accountability_matrix.createMany({
+    data: DEFAULT_RACI.map((row) => ({ ...row, programId })),
   });
 }
 
@@ -199,6 +201,52 @@ exports.switchProgram = async (user, programId) => {
   await prisma.users.update({ where: { id: user.id }, data: { activeProgramId: programId } });
   const program = await prisma.programs.findUnique({ where: { id: programId } });
   return programJson(program);
+};
+
+exports.getProgram = async (user, programId) => {
+  const membership = await assertProgramMember(user, programId);
+  const program = await prisma.programs.findUnique({ where: { id: programId } });
+  if (!program) throw new AppError(404, "NOT_FOUND", "Program not found.");
+  return programJson(program, membership);
+};
+
+exports.listMembers = async (user, programId) => {
+  await assertProgramMember(user, programId);
+  const rows = await prisma.program_memberships.findMany({
+    where: { programId },
+    include: { organization: true },
+    orderBy: { createdAt: "asc" },
+  });
+  return rows.map((m) => ({
+    id: m.id,
+    organizationId: m.organizationId,
+    organizationName: m.organization.displayName || m.organization.name,
+    organizationSlug: m.organization.slug,
+    organizationType: m.organization.type,
+    roleInProgram: m.roleInProgram,
+    createdAt: m.createdAt.toISOString(),
+  }));
+};
+
+exports.listOrgInvites = async (user, programId) => {
+  await assertProgramMember(user, programId);
+  if (!["silva_owner", "silva_country_manager", "spx_principal", "system_admin"].includes(user.role)) {
+    throw new AppError(403, "FORBIDDEN", "Insufficient permissions to list program invites.");
+  }
+  const rows = await prisma.program_org_invites.findMany({
+    where: { programId },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    toOrganizationId: r.toOrganizationId,
+    toOrgSlug: r.toOrgSlug,
+    toEmail: r.toEmail,
+    roleInProgram: r.roleInProgram,
+    status: r.status,
+    expiresAt: r.expiresAt.toISOString(),
+    createdAt: r.createdAt.toISOString(),
+  }));
 };
 
 exports.updateTenantBranding = async (user, dto) => {

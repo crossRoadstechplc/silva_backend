@@ -181,6 +181,10 @@ exports.listAccountability = catchAsync(async (req, res) => {
   const data = await platformService.listAccountability(req.user);
   res.json({ data });
 });
+exports.createAccountability = catchAsync(async (req, res) => {
+  const data = await platformService.createAccountability(req.body, req.user);
+  res.status(201).json({ data });
+});
 exports.patchAccountability = catchAsync(async (req, res) => {
   const data = await platformService.patchAccountability(req.params.operatingDiscipline, req.body, req.user);
   res.json({ data });
@@ -223,6 +227,10 @@ exports.generateGl = catchAsync(async (req, res) => {
 });
 exports.findGl = catchAsync(async (req, res) => {
   const data = await platformService.findGlExport(req.params.exportId, req.user, req.restrictedExport);
+  res.json({ data });
+});
+exports.listAttachments = catchAsync(async (req, res) => {
+  const data = await platformService.listAttachments(req.query, req.user);
   res.json({ data });
 });
 exports.uploadUrl = catchAsync(async (req, res) => {

@@ -49,6 +49,22 @@ app.get("/health", (req, res) => res.json({ data: { ok: true } }));
 app.get("/api/v1/health", (req, res) => res.json({ data: { ok: true } }));
 app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openapi));
 
+const fs = require("fs");
+const path = require("path");
+app.put("/local-upload/:storageKey", express.raw({ type: "*/*", limit: "25mb" }), (req, res) => {
+  const storageKey = decodeURIComponent(req.params.storageKey);
+  const dest = path.join(process.cwd(), "uploads", storageKey);
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.writeFileSync(dest, req.body);
+  res.status(204).end();
+});
+app.get("/local-download/:storageKey", (req, res) => {
+  const storageKey = decodeURIComponent(req.params.storageKey);
+  const dest = path.join(process.cwd(), "uploads", storageKey);
+  if (!fs.existsSync(dest)) return res.status(404).json({ error: { code: "NOT_FOUND", message: "File not found." } });
+  res.sendFile(dest);
+});
+
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/programs", programRoutes);
 app.use("/api/v1/organizations", orgRouter);

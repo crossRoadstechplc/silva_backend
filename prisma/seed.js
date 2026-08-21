@@ -177,16 +177,72 @@ async function main() {
     },
   });
 
-  await prisma.accountability_matrix.create({
-    data: {
-      programId: program.id,
-      operatingDiscipline: "Agronomic Operations",
-      executeRole: "B-Agro",
-      validateRole: "SPX",
-      decideRole: "SPX",
-      authorRole: "SPX",
-      schedule3Ref: "AFE Bands A-C",
-    },
+  await prisma.accountability_matrix.createMany({
+    data: [
+      {
+        programId: program.id,
+        operatingDiscipline: "Agronomic Operations",
+        executeRole: "B-Agro",
+        validateRole: "SPX",
+        decideRole: "SPX",
+        authorRole: "SPX",
+        schedule3Ref: "AFE Bands A-D",
+      },
+      {
+        programId: program.id,
+        operatingDiscipline: "Procurement & Tender",
+        executeRole: "SPX",
+        validateRole: "SPX",
+        decideRole: "Silva (Band C/D)",
+        authorRole: "SPX",
+        schedule3Ref: "Procurement / tender",
+      },
+      {
+        programId: program.id,
+        operatingDiscipline: "Contractor Appointment",
+        executeRole: "SPX",
+        validateRole: "SPX",
+        decideRole: "Silva",
+        authorRole: "SPX",
+        schedule3Ref: "Vendor appointment / removal",
+      },
+      {
+        programId: program.id,
+        operatingDiscipline: "Emergency / Stop-Work",
+        executeRole: "Field / SPX",
+        validateRole: "SPX",
+        decideRole: "SPX (immediate)",
+        authorRole: "SPX",
+        schedule3Ref: "Safety override",
+      },
+      {
+        programId: program.id,
+        operatingDiscipline: "Hiring",
+        executeRole: "B-Agro",
+        validateRole: "SPX",
+        decideRole: "SPX",
+        authorRole: "SPX",
+        schedule3Ref: "Labor controls",
+      },
+      {
+        programId: program.id,
+        operatingDiscipline: "Reporting Sign-Off",
+        executeRole: "SPX",
+        validateRole: "SPX Principal",
+        decideRole: "SPX Principal",
+        authorRole: "SPX",
+        schedule3Ref: "Schedule 5 cadence",
+      },
+      {
+        programId: program.id,
+        operatingDiscipline: "Infrastructure",
+        executeRole: "Vendor",
+        validateRole: "SPX",
+        decideRole: "Silva (Band C/D)",
+        authorRole: "SPX",
+        schedule3Ref: "AFE Bands C-D",
+      },
+    ],
   });
 
   await prisma.platform_config.create({
@@ -214,11 +270,16 @@ async function main() {
     },
   });
 
-  await prisma.coa_mapping.create({
-    data: { id: "coa_01", sourceAccount: "AFP-pruning", glAccount: "6100-Field Operations", description: "Pruning program spend" },
+  await prisma.coa_mapping.createMany({
+    data: [
+      { id: "coa_01", sourceAccount: "AFP-pruning", glAccount: "6100-Field Operations", description: "Pruning program spend" },
+      { id: "coa_02", sourceAccount: "AFP-fertilizer", glAccount: "6120-Inputs", description: "Fertilizer and soil amendment" },
+      { id: "coa_03", sourceAccount: "AFP-harvest", glAccount: "6200-Harvest Labor", description: "Seasonal harvest labor" },
+      { id: "coa_04", sourceAccount: "AFP-infra", glAccount: "6400-Infrastructure", description: "Washing station and roads" },
+    ],
   });
 
-  const afp = await prisma.afp_lines.create({
+  const afpPruning = await prisma.afp_lines.create({
     data: {
       id: "AFP-2026-001",
       programId: program.id,
@@ -234,13 +295,77 @@ async function main() {
       createdByUserId: principal.id,
     },
   });
-  await prisma.id_sequences.create({ data: { name: "afp-2026", lastValue: 1 } });
+  const afpFert = await prisma.afp_lines.create({
+    data: {
+      id: "AFP-2026-002",
+      programId: program.id,
+      year: 2026,
+      operatingDiscipline: "Agronomic Operations",
+      activity: "Soil amendment & fertilizer campaign (Blocks 5–12)",
+      budgetAllocatedUsd: 28500,
+      kpiTarget: "Apply full nutrient package before rains",
+      status: "approved",
+      silvaApproved: true,
+      approvalDate: new Date("2026-01-18T00:00:00.000Z"),
+      notes: "Aligned with seasonal calendar Q1–Q2",
+      createdByUserId: principal.id,
+    },
+  });
+  const afpHarvest = await prisma.afp_lines.create({
+    data: {
+      id: "AFP-2026-003",
+      programId: program.id,
+      year: 2026,
+      operatingDiscipline: "Harvest Operations",
+      activity: "Main harvest labor & cherry logistics",
+      budgetAllocatedUsd: 61000,
+      kpiTarget: "Hold picker productivity ≥ 40 kg/day",
+      status: "approved",
+      silvaApproved: true,
+      approvalDate: new Date("2026-02-01T00:00:00.000Z"),
+      notes: "Peak season Q3–Q4",
+      createdByUserId: principal.id,
+    },
+  });
+  const afpInfra = await prisma.afp_lines.create({
+    data: {
+      id: "AFP-2026-004",
+      programId: program.id,
+      year: 2026,
+      operatingDiscipline: "Infrastructure",
+      activity: "Washing station rehab & farm roads",
+      budgetAllocatedUsd: 55000,
+      kpiTarget: "Station online before peak cherry intake",
+      status: "approved",
+      silvaApproved: true,
+      approvalDate: new Date("2026-01-22T00:00:00.000Z"),
+      notes: "Band C/D capital path",
+      createdByUserId: principal.id,
+    },
+  });
+  await prisma.afp_lines.create({
+    data: {
+      id: "AFP-2027-001",
+      programId: program.id,
+      year: 2027,
+      operatingDiscipline: "Agronomic Operations",
+      activity: "Year 2 canopy management & replanting pockets",
+      budgetAllocatedUsd: 38000,
+      kpiTarget: "Close remaining neglected pockets",
+      status: "draft",
+      silvaApproved: false,
+      notes: "Draft year-line for planning demos",
+      createdByUserId: principal.id,
+    },
+  });
+  await prisma.id_sequences.create({ data: { name: "afp-2026", lastValue: 4 } });
+  await prisma.id_sequences.create({ data: { name: "afp-2027", lastValue: 1 } });
 
   const afe = await prisma.afes.create({
     data: {
       id: "AFE-0001",
       programId: program.id,
-      afpLineId: afp.id,
+      afpLineId: afpPruning.id,
       operatingDiscipline: "Agronomic Operations",
       description: "Pruning Blocks 1 to 4",
       estimatedCostUsd: 4500,
@@ -255,9 +380,25 @@ async function main() {
   });
   await prisma.afes.create({
     data: {
+      id: "AFE-0002",
+      programId: program.id,
+      afpLineId: afpFert.id,
+      operatingDiscipline: "Agronomic Operations",
+      description: "Fertilizer delivery Blocks 5–8",
+      estimatedCostUsd: 12500,
+      band: "B",
+      spxValidated: true,
+      silvaApprovalRequired: false,
+      status: "approved",
+      approvalDate: new Date("2026-02-05T00:00:00.000Z"),
+      createdByUserId: handler.id,
+    },
+  });
+  await prisma.afes.create({
+    data: {
       id: "AFE-0003",
       programId: program.id,
-      afpLineId: afp.id,
+      afpLineId: afpInfra.id,
       operatingDiscipline: "Infrastructure",
       description: "Washing station inspection and minor rehabilitation",
       estimatedCostUsd: 32000,
@@ -268,7 +409,22 @@ async function main() {
       createdByUserId: handler.id,
     },
   });
-  await prisma.id_sequences.create({ data: { name: "afe", lastValue: 3 } });
+  await prisma.afes.create({
+    data: {
+      id: "AFE-0004",
+      programId: program.id,
+      afpLineId: afpHarvest.id,
+      operatingDiscipline: "Harvest Operations",
+      description: "Peak harvest labor mobilization (Week 28–36)",
+      estimatedCostUsd: 48000,
+      band: "C",
+      spxValidated: false,
+      silvaApprovalRequired: true,
+      status: "submitted",
+      createdByUserId: handler.id,
+    },
+  });
+  await prisma.id_sequences.create({ data: { name: "afe", lastValue: 4 } });
 
   const wo = await prisma.work_orders.create({
     data: {
@@ -282,14 +438,55 @@ async function main() {
       weekEnd: 6,
       spxOversightHoursL1: 4,
       spxOversightHoursL2: 2,
-      assignedVendorId: null,
+      assignedVendorId: bagro.id,
       status: "issued",
     },
   });
-  await prisma.id_sequences.create({ data: { name: "wo", lastValue: 1 } });
+  await prisma.work_orders.create({
+    data: {
+      id: "WO-0002",
+      programId: program.id,
+      afeId: "AFE-0002",
+      category: "Agronomic Operations",
+      activity: "Fertilizer application Blocks 5–8",
+      tier: "project",
+      weekStart: 8,
+      weekEnd: 12,
+      spxOversightHoursL1: 6,
+      spxOversightHoursL2: 3,
+      assignedVendorId: bagro.id,
+      status: "draft",
+    },
+  });
+  await prisma.id_sequences.create({ data: { name: "wo", lastValue: 2 } });
 
   await prisma.work_order_assignments.create({
     data: { id: "woa_01", workOrderId: wo.id, userId: lead.id, roleOnOrder: "vendor_field_lead", isPrimary: true },
+  });
+
+  await prisma.vendor_contracts.create({
+    data: {
+      id: "vct_01",
+      vendorId: bagro.id,
+      afeId: afe.id,
+      contractValueUsd: 4500,
+      procurementRoute: "sole_source",
+      tenderStatus: "n_a",
+      contractStart: new Date("2026-01-10T00:00:00.000Z"),
+      contractEnd: new Date("2026-03-31T00:00:00.000Z"),
+    },
+  });
+  await prisma.vendor_contracts.create({
+    data: {
+      id: "vct_02",
+      vendorId: bagro.id,
+      afeId: "AFE-0003",
+      contractValueUsd: 32000,
+      procurementRoute: "competitive_tender",
+      tenderStatus: "in_progress",
+      contractStart: new Date("2026-03-01T00:00:00.000Z"),
+      contractEnd: new Date("2026-08-31T00:00:00.000Z"),
+    },
   });
 
   await prisma.vendor_scorecards.create({

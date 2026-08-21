@@ -88,6 +88,7 @@ disclosureRoutes.patch("/:disclosureId", requireRole(SPX), platform.patchDisclos
 const accountabilityRoutes = express.Router();
 accountabilityRoutes.use(authenticateJWT);
 accountabilityRoutes.get("/", platform.listAccountability);
+accountabilityRoutes.post("/", requireRole(["spx_principal"]), platform.createAccountability);
 accountabilityRoutes.patch("/:operatingDiscipline", requireRole(["spx_principal"]), platform.patchAccountability);
 
 const schedule3Routes = express.Router();
@@ -114,6 +115,7 @@ glRoutes.get("/:exportId", platform.findGl);
 
 const attachmentRoutes = express.Router();
 attachmentRoutes.use(authenticateJWT);
+attachmentRoutes.get("/", platform.listAttachments);
 attachmentRoutes.post("/upload-url", validate(schemas.attachmentUpload), platform.uploadUrl);
 attachmentRoutes.post("/", validate(schemas.attachmentCreate), platform.createAttachment);
 attachmentRoutes.get("/:attachmentId", platform.findAttachment);

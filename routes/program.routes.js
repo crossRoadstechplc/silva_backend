@@ -27,20 +27,44 @@ router.post(
 );
 
 router.post(
-  "/:programId/invite-org",
-  validate(schemas.programInviteOrg),
-  catchAsync(async (req, res) => {
-    const data = await programService.inviteOrganization(req.user, req.params.programId, req.validatedBody);
-    res.status(201).json({ data });
-  }),
-);
-
-router.post(
   "/accept-invite",
   validate(schemas.acceptProgramInvite),
   catchAsync(async (req, res) => {
     const data = await programService.acceptProgramInvite(req.user, req.validatedBody.token);
     res.json({ data });
+  }),
+);
+
+router.get(
+  "/:programId",
+  catchAsync(async (req, res) => {
+    const data = await programService.getProgram(req.user, req.params.programId);
+    res.json({ data });
+  }),
+);
+
+router.get(
+  "/:programId/members",
+  catchAsync(async (req, res) => {
+    const data = await programService.listMembers(req.user, req.params.programId);
+    res.json({ data });
+  }),
+);
+
+router.get(
+  "/:programId/invites",
+  catchAsync(async (req, res) => {
+    const data = await programService.listOrgInvites(req.user, req.params.programId);
+    res.json({ data });
+  }),
+);
+
+router.post(
+  "/:programId/invite-org",
+  validate(schemas.programInviteOrg),
+  catchAsync(async (req, res) => {
+    const data = await programService.inviteOrganization(req.user, req.params.programId, req.validatedBody);
+    res.status(201).json({ data });
   }),
 );
 

@@ -358,6 +358,28 @@ exports.listAccountability = async (user) =>
     orderBy: { operatingDiscipline: "asc" },
   });
 
+exports.createAccountability = async (dto, user) => {
+  if (user.role !== "spx_principal") throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
+  const programId = requireProgramId(user);
+  const operatingDiscipline = String(dto.operatingDiscipline || "").trim();
+  if (!operatingDiscipline) throw new AppError(400, "VALIDATION_ERROR", "operatingDiscipline is required.");
+  const existing = await prisma.accountability_matrix.findUnique({
+    where: { programId_operatingDiscipline: { programId, operatingDiscipline } },
+  });
+  if (existing) throw new AppError(409, "CONFLICT", "Matrix row already exists for this discipline.");
+  return prisma.accountability_matrix.create({
+    data: {
+      programId,
+      operatingDiscipline,
+      executeRole: dto.executeRole || "Execution partner",
+      validateRole: dto.validateRole || "SPX",
+      decideRole: dto.decideRole || "SPX",
+      authorRole: dto.authorRole || "SPX",
+      schedule3Ref: dto.schedule3Ref || "Schedule 3",
+    },
+  });
+};
+
 exports.patchAccountability = async (operatingDiscipline, dto, user) => {
   if (user.role !== "spx_principal") throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
   const programId = requireProgramId(user);
@@ -572,6 +594,27 @@ exports.findAudit = async (id, user) => {
   const row = await prisma.audit_log.findUnique({ where: { id } });
   if (!row) throw new AppError(404, "NOT_FOUND", "Audit record not found.");
   return auditJson(row);
+};
+
+exports.listAttachments = async (query, user) => {
+  if (!query.entityType || !query.entityId) {
+    throw new AppError(400, "VALIDATION_ERROR", "entityType and entityId are required.");
+  }
+  const rows = await prisma.attachments.findMany({
+    where: { entityType: query.entityType, entityId: query.entityId },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    entityType: row.entityType,
+    entityId: row.entityId,
+    fileName: row.fileName,
+    contentType: row.contentType,
+    sizeBytes: row.sizeBytes,
+    storageKey: row.storageKey,
+    uploadedByUserId: row.uploadedByUserId,
+    createdAt: row.createdAt.toISOString(),
+  }));
 };
 
 exports.uploadUrl = async (dto, user) => {
