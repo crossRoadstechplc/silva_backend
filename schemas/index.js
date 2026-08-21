@@ -172,6 +172,40 @@ const disclosureCreate = z.object({
   period: z.string().min(1),
   notes: z.string().optional(),
 });
+const ifsFormCreate = z.object({
+  formType: z.enum([
+    "daily_work_log",
+    "pruning_completion",
+    "fertilizer_application",
+    "pest_disease_scout",
+    "harvest_cherry_intake",
+    "safety_stop_work",
+    "equipment_downtime",
+    "weather_field_readiness",
+    "labor_attendance",
+    "block_inspection",
+  ]),
+  title: z.string().optional(),
+  workOrderId: z.string().optional(),
+  fieldTicketId: z.string().optional(),
+  blockRef: z.string().optional(),
+  weekNumber: z.number().int().min(1).max(52).optional(),
+  payload: z.record(z.any()).optional(),
+  notes: z.string().optional(),
+});
+const seasonCalendarCreate = z.object({
+  year: z.number().int().min(2020).max(2100),
+  name: z.string().min(1),
+  notes: z.string().optional(),
+});
+const seasonWindowCreate = z.object({
+  operatingDiscipline: z.string().min(1),
+  activity: z.string().min(1),
+  weekStart: z.number().int().min(1).max(52),
+  weekEnd: z.number().int().min(1).max(52),
+  linkedWorkOrderId: z.string().optional(),
+  notes: z.string().optional(),
+});
 const coaCreate = z.object({
   sourceAccount: z.string().min(1),
   glAccount: z.string().min(1),
@@ -215,4 +249,7 @@ module.exports = {
   attachmentCreate,
   disclosureCreate,
   coaCreate,
+  ifsFormCreate,
+  seasonCalendarCreate,
+  seasonWindowCreate,
 };

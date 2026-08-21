@@ -11,6 +11,9 @@ async function main() {
   await prisma.audit_log.deleteMany();
   await prisma.notifications.deleteMany();
   await prisma.attachments.deleteMany();
+  await prisma.ifs_forms.deleteMany();
+  await prisma.season_windows.deleteMany();
+  await prisma.season_calendars.deleteMany();
   await prisma.gl_journal_export_lines.deleteMany();
   await prisma.gl_journal_exports.deleteMany();
   await prisma.reports.deleteMany();
@@ -487,6 +490,118 @@ async function main() {
       contractStart: new Date("2026-03-01T00:00:00.000Z"),
       contractEnd: new Date("2026-08-31T00:00:00.000Z"),
     },
+  });
+
+  const calendar = await prisma.season_calendars.create({
+    data: {
+      id: "cal_2026",
+      programId: program.id,
+      year: 2026,
+      name: "Shecha Year 1 operating calendar",
+      status: "active",
+      notes: "SPX-issued seasonal windows for B-Agro execution.",
+      createdByUserId: principal.id,
+    },
+  });
+  await prisma.season_windows.createMany({
+    data: [
+      {
+        id: "cwin_01",
+        calendarId: calendar.id,
+        programId: program.id,
+        operatingDiscipline: "Agronomic Operations",
+        activity: "Farm-wide pruning & topping",
+        weekStart: 3,
+        weekEnd: 10,
+        status: "in_progress",
+        linkedWorkOrderId: wo.id,
+        issuedAt: new Date("2026-01-10T00:00:00.000Z"),
+        notes: "Linked to WO-0001",
+      },
+      {
+        id: "cwin_02",
+        calendarId: calendar.id,
+        programId: program.id,
+        operatingDiscipline: "Agronomic Operations",
+        activity: "Fertilizer & soil amendment",
+        weekStart: 8,
+        weekEnd: 14,
+        status: "issued",
+        linkedWorkOrderId: "WO-0002",
+        issuedAt: new Date("2026-02-01T00:00:00.000Z"),
+      },
+      {
+        id: "cwin_03",
+        calendarId: calendar.id,
+        programId: program.id,
+        operatingDiscipline: "Infrastructure",
+        activity: "Washing station rehab window",
+        weekStart: 12,
+        weekEnd: 22,
+        status: "planned",
+      },
+      {
+        id: "cwin_04",
+        calendarId: calendar.id,
+        programId: program.id,
+        operatingDiscipline: "Harvest Operations",
+        activity: "Main cherry harvest",
+        weekStart: 28,
+        weekEnd: 40,
+        status: "planned",
+      },
+      {
+        id: "cwin_05",
+        calendarId: calendar.id,
+        programId: program.id,
+        operatingDiscipline: "Harvest Operations",
+        activity: "Late pick & post-harvest close",
+        weekStart: 40,
+        weekEnd: 46,
+        status: "planned",
+      },
+    ],
+  });
+
+  await prisma.ifs_forms.createMany({
+    data: [
+      {
+        id: "ifs_01",
+        programId: program.id,
+        formType: "daily_work_log",
+        title: "Daily work log — Blocks 1–4",
+        workOrderId: wo.id,
+        blockRef: "B1-B4",
+        weekNumber: 4,
+        payload: { crewCount: 18, hoursWorked: 8, blocks: "1-4", summary: "Pruning progressing on schedule" },
+        status: "validated",
+        submittedByUserId: lead.id,
+        validatedByUserId: handler.id,
+        notes: "Linked to WO-0001",
+      },
+      {
+        id: "ifs_02",
+        programId: program.id,
+        formType: "pruning_completion",
+        title: "Pruning completion — Block 2",
+        workOrderId: wo.id,
+        blockRef: "B2",
+        weekNumber: 5,
+        payload: { blockRef: "B2", treesCompleted: 420, qualityNotes: "Canopy height within target" },
+        status: "submitted",
+        submittedByUserId: lead.id,
+      },
+      {
+        id: "ifs_03",
+        programId: program.id,
+        formType: "weather_field_readiness",
+        title: "Field readiness — Week 8",
+        weekNumber: 8,
+        payload: { rainfallMm: 12, soilCondition: "workable", readyToWork: true },
+        status: "draft",
+        submittedByUserId: lead.id,
+      },
+    ],
   });
 
   await prisma.vendor_scorecards.create({

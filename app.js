@@ -37,6 +37,7 @@ const {
   glRoutes,
   attachmentRoutes,
 } = require("./routes/platform.routes");
+const { ifsFormRoutes, seasonCalendarRoutes, seasonWindowRoutes } = require("./routes/fieldOps.routes");
 
 const app = express();
 
@@ -98,6 +99,9 @@ app.use("/api/v1/related-party-disclosures", ...programScoped, disclosureRoutes)
 app.use("/api/v1/coa-mapping", coaRoutes);
 app.use("/api/v1/gl-journal-exports", ...programScoped, glRoutes);
 app.use("/api/v1/attachments", attachmentRoutes);
+app.use("/api/v1/ifs-forms", ...programScoped, ifsFormRoutes);
+app.use("/api/v1/season-calendars", ...programScoped, seasonCalendarRoutes);
+app.use("/api/v1/season-windows", ...programScoped, seasonWindowRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

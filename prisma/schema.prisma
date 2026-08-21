@@ -85,6 +85,40 @@ enum FieldTicketStatus {
   rejected
 }
 
+enum IfsFormType {
+  daily_work_log
+  pruning_completion
+  fertilizer_application
+  pest_disease_scout
+  harvest_cherry_intake
+  safety_stop_work
+  equipment_downtime
+  weather_field_readiness
+  labor_attendance
+  block_inspection
+}
+
+enum IfsFormStatus {
+  draft
+  submitted
+  validated
+  rejected
+}
+
+enum SeasonCalendarStatus {
+  draft
+  active
+  archived
+}
+
+enum SeasonWindowStatus {
+  planned
+  issued
+  in_progress
+  complete
+  cancelled
+}
+
 enum PaymentRequestStatus {
   draft
   submitted
@@ -216,6 +250,9 @@ model programs {
   notifications   notifications[]
   harvestKpis     harvest_kpi_snapshots[]
   auditLogs       audit_log[]
+  ifsForms        ifs_forms[]
+  seasonCalendars season_calendars[]
+  seasonWindows   season_windows[]
   schedule3       schedule3_thresholds[]
   schedule4       schedule4_insurance[]
   accountability  accountability_matrix[]
@@ -290,6 +327,9 @@ model users {
   reportsReleased  reports[]
   afpCreated       afp_lines[]
   afeCreated       afes[]
+  ifsSubmitted     ifs_forms[] @relation("IfsSubmitter")
+  ifsValidated     ifs_forms[] @relation("IfsValidator")
+  seasonCalendars  season_calendars[]
 
   @@index([organizationId])
   @@index([role])
@@ -449,6 +489,8 @@ model work_orders {
   fieldTickets        field_tickets[]
   paymentRequests     payment_requests[]
   settlements         owner_settlements[]
+  ifsForms            ifs_forms[]
+  seasonWindows       season_windows[]
 
   @@index([programId, status])
 }
@@ -503,6 +545,7 @@ model field_tickets {
   submittedBy       users             @relation("TicketSubmitter", fields: [submittedByUserId], references: [id])
   signedOffBy       users?            @relation("TicketSigner", fields: [signedOffByUserId], references: [id])
   paymentRequests   payment_requests[]
+  ifsForms          ifs_forms[]
 
   @@index([programId, status])
 }
@@ -764,6 +807,77 @@ model attachments {
   uploadedByUserId String
   createdAt        DateTime @default(now())
   uploadedBy       users    @relation(fields: [uploadedByUserId], references: [id])
+}
+
+model ifs_forms {
+  id                 String       @id
+  programId          String
+  formType           IfsFormType
+  title              String
+  workOrderId        String?
+  fieldTicketId      String?
+  blockRef           String?
+  weekNumber         Int?
+  payload            Json
+  status             IfsFormStatus @default(draft)
+  submittedByUserId  String
+  validatedByUserId  String?
+  rejectionReason    String?
+  notes              String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  program            programs     @relation(fields: [programId], references: [id])
+  workOrder          work_orders? @relation(fields: [workOrderId], references: [id])
+  fieldTicket        field_tickets? @relation(fields: [fieldTicketId], references: [id])
+  submittedBy        users        @relation("IfsSubmitter", fields: [submittedByUserId], references: [id])
+  validatedBy        users?       @relation("IfsValidator", fields: [validatedByUserId], references: [id])
+
+  @@index([programId, formType, status])
+  @@index([workOrderId])
+}
+
+model season_calendars {
+  id              String               @id
+  programId       String
+  year            Int
+  name            String
+  status          SeasonCalendarStatus @default(draft)
+  notes           String?
+  createdByUserId String
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  program         programs             @relation(fields: [programId], references: [id])
+  createdBy       users                @relation(fields: [createdByUserId], references: [id])
+  windows         season_windows[]
+
+  @@unique([programId, year, name])
+  @@index([programId, year, status])
+}
+
+model season_windows {
+  id                 String             @id
+  calendarId         String
+  programId          String
+  operatingDiscipline String
+  activity           String
+  weekStart          Int
+  weekEnd            Int
+  status             SeasonWindowStatus @default(planned)
+  linkedWorkOrderId  String?
+  notes              String?
+  issuedAt           DateTime?
+  completedAt        DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  calendar           season_calendars   @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  program            programs           @relation(fields: [programId], references: [id])
+  linkedWorkOrder    work_orders?       @relation(fields: [linkedWorkOrderId], references: [id])
+
+  @@index([programId, status])
+  @@index([calendarId, weekStart])
 }
 
 model id_sequences {
