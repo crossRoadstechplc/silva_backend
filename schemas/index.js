@@ -73,11 +73,49 @@ const afpCreate = z.object({
   kpiTarget: z.string().min(1),
   notes: z.string().nullable().optional(),
 });
-const afeCreate = z.object({
-  afpLineId: z.string().min(1),
-  operatingDiscipline: z.string().min(1),
+const afeCreate = z
+  .object({
+    afpLineId: z.string().min(1).optional().nullable(),
+    operatingDiscipline: z.string().min(1),
+    description: z.string().min(1),
+    estimatedCostUsd: z.number().positive(),
+    planningMode: z.enum(["planned", "ad_hoc"]).optional(),
+    origin: z.enum(["spx_initiated", "silva_request", "vendor_request"]).optional(),
+  })
+  .superRefine((data, ctx) => {
+    const mode = data.planningMode || "planned";
+    if (mode === "planned" && !data.afpLineId) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "afpLineId is required for planned AFEs." });
+    }
+  });
+
+const activityRequestCreate = z.object({
+  requestType: z.enum([
+    "coffee_testing",
+    "farm_status_assessment",
+    "soil_analysis",
+    "quality_audit",
+    "infrastructure_inspection",
+  ]),
+  title: z.string().min(1),
   description: z.string().min(1),
+  urgency: z.enum(["normal", "urgent"]).optional(),
+  blocksOrAreas: z.string().optional(),
+});
+
+const activityRequestConvert = z.object({
+  operatingDiscipline: z.string().min(1),
   estimatedCostUsd: z.number().positive(),
+  afpLineId: z.string().min(1).optional().nullable(),
+  description: z.string().optional(),
+});
+
+const reportSectionsPatch = z.object({
+  includeLogIds: z.array(z.string()).optional(),
+});
+
+const ifsIncludeInReport = z.object({
+  includeInSilvaReport: z.boolean(),
 });
 const woCreate = z.object({
   afeId: z.string().min(1),
@@ -235,6 +273,10 @@ module.exports = {
   membershipRole,
   afpCreate,
   afeCreate,
+  activityRequestCreate,
+  activityRequestConvert,
+  reportSectionsPatch,
+  ifsIncludeInReport,
   woCreate,
   assignmentCreate,
   taskCreate,

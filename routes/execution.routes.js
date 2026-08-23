@@ -7,7 +7,7 @@ const exec = require("../controllers/execution.controller");
 const schemas = require("../schemas");
 
 const SPX = ["spx_principal", "spx_account_handler", "spx_field_supervisor", "system_admin"];
-const VENDOR_LEAD = ["vendor_manager", "vendor_supervisor", "vendor_field_lead", "vendor_admin", ...SPX];
+const VENDOR_LEAD = ["vendor_field_lead", "vendor_admin", ...SPX];
 const FT_CREATE = ["vendor_field_lead", "vendor_worker", "vendor_supervisor", "vendor_manager"];
 
 const workOrderRoutes = express.Router();

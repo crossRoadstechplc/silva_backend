@@ -101,8 +101,39 @@ enum IfsFormType {
 enum IfsFormStatus {
   draft
   submitted
+  vendor_reviewed
   validated
   rejected
+}
+
+enum AfePlanningMode {
+  planned
+  ad_hoc
+}
+
+enum AfeOrigin {
+  spx_initiated
+  silva_request
+  vendor_request
+}
+
+enum ActivityRequestType {
+  coffee_testing
+  farm_status_assessment
+  soil_analysis
+  quality_audit
+  infrastructure_inspection
+}
+
+enum ActivityRequestStatus {
+  submitted
+  converted
+  dismissed
+}
+
+enum ActivityRequestOrigin {
+  silva_request
+  vendor_request
 }
 
 enum SeasonCalendarStatus {
@@ -251,6 +282,7 @@ model programs {
   harvestKpis     harvest_kpi_snapshots[]
   auditLogs       audit_log[]
   ifsForms        ifs_forms[]
+  activityRequests activity_requests[]
   seasonCalendars season_calendars[]
   seasonWindows   season_windows[]
   schedule3       schedule3_thresholds[]
@@ -328,7 +360,9 @@ model users {
   afpCreated       afp_lines[]
   afeCreated       afes[]
   ifsSubmitted     ifs_forms[] @relation("IfsSubmitter")
+  ifsReviewed      ifs_forms[] @relation("IfsReviewer")
   ifsValidated     ifs_forms[] @relation("IfsValidator")
+  activityRequests activity_requests[] @relation("ActivityRequester")
   seasonCalendars  season_calendars[]
 
   @@index([organizationId])
@@ -439,29 +473,58 @@ model afp_lines {
 }
 
 model afes {
-  id                    String    @id
+  id                    String          @id
   programId             String
-  afpLineId             String
+  afpLineId             String?
   operatingDiscipline   String
   description           String
-  estimatedCostUsd      Decimal   @db.Decimal(14, 2)
+  estimatedCostUsd      Decimal         @db.Decimal(14, 2)
   band                  AfeBand
-  spxValidated          Boolean   @default(false)
+  planningMode          AfePlanningMode @default(planned)
+  origin                AfeOrigin       @default(spx_initiated)
+  activityRequestId     String?         @unique
+  spxValidated          Boolean         @default(false)
   silvaApprovalRequired Boolean
   silvaApproved         Boolean?
   approvalDate          DateTime?
-  status                AfeStatus @default(draft)
+  status                AfeStatus       @default(draft)
   createdByUserId       String
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
 
-  program               programs  @relation(fields: [programId], references: [id])
-  afp                   afp_lines @relation(fields: [afpLineId], references: [id])
-  createdBy             users     @relation(fields: [createdByUserId], references: [id])
+  program               programs          @relation(fields: [programId], references: [id])
+  afp                   afp_lines?        @relation(fields: [afpLineId], references: [id])
+  activityRequest       activity_requests? @relation(fields: [activityRequestId], references: [id])
+  createdBy             users             @relation(fields: [createdByUserId], references: [id])
   workOrders            work_orders[]
   contracts             vendor_contracts[]
 
   @@index([programId, status, band])
+  @@index([programId, planningMode])
+}
+
+model activity_requests {
+  id                String                @id
+  programId         String
+  requestType       ActivityRequestType
+  origin            ActivityRequestOrigin @default(silva_request)
+  title             String
+  description       String
+  urgency           String                @default("normal")
+  blocksOrAreas     String?
+  status            ActivityRequestStatus @default(submitted)
+  requestedByUserId String
+  convertedAfeId    String?
+  dismissalReason   String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  program           programs              @relation(fields: [programId], references: [id])
+  requestedBy       users                 @relation("ActivityRequester", fields: [requestedByUserId], references: [id])
+  convertedAfe      afes?
+
+  @@index([programId, status])
+  @@index([programId, origin])
 }
 
 model work_orders {
@@ -810,31 +873,36 @@ model attachments {
 }
 
 model ifs_forms {
-  id                 String       @id
-  programId          String
-  formType           IfsFormType
-  title              String
-  workOrderId        String?
-  fieldTicketId      String?
-  blockRef           String?
-  weekNumber         Int?
-  payload            Json
-  status             IfsFormStatus @default(draft)
-  submittedByUserId  String
-  validatedByUserId  String?
-  rejectionReason    String?
-  notes              String?
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
+  id                   String        @id
+  programId            String
+  formType             IfsFormType
+  title                String
+  workOrderId          String?
+  fieldTicketId        String?
+  blockRef             String?
+  weekNumber           Int?
+  payload              Json
+  status               IfsFormStatus @default(draft)
+  submittedByUserId    String
+  reviewedByUserId     String?
+  reviewedAt           DateTime?
+  validatedByUserId    String?
+  rejectionReason      String?
+  includeInSilvaReport Boolean       @default(false)
+  notes                String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 
-  program            programs     @relation(fields: [programId], references: [id])
-  workOrder          work_orders? @relation(fields: [workOrderId], references: [id])
-  fieldTicket        field_tickets? @relation(fields: [fieldTicketId], references: [id])
-  submittedBy        users        @relation("IfsSubmitter", fields: [submittedByUserId], references: [id])
-  validatedBy        users?       @relation("IfsValidator", fields: [validatedByUserId], references: [id])
+  program              programs      @relation(fields: [programId], references: [id])
+  workOrder            work_orders?  @relation(fields: [workOrderId], references: [id])
+  fieldTicket          field_tickets? @relation(fields: [fieldTicketId], references: [id])
+  submittedBy          users         @relation("IfsSubmitter", fields: [submittedByUserId], references: [id])
+  reviewedBy           users?        @relation("IfsReviewer", fields: [reviewedByUserId], references: [id])
+  validatedBy          users?        @relation("IfsValidator", fields: [validatedByUserId], references: [id])
 
   @@index([programId, formType, status])
   @@index([workOrderId])
+  @@index([programId, includeInSilvaReport])
 }
 
 model season_calendars {

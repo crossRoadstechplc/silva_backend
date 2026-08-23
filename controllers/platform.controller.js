@@ -149,6 +149,14 @@ exports.releaseReport = catchAsync(async (req, res) => {
   const data = await platformService.releaseReport(req.params.reportId, req.user);
   res.json({ data });
 });
+exports.listCuratableLogs = catchAsync(async (req, res) => {
+  const data = await platformService.listCuratableLogs(req.user);
+  res.json({ data });
+});
+exports.patchReportSections = catchAsync(async (req, res) => {
+  const data = await platformService.patchReportSections(req.params.reportId, req.validatedBody, req.user);
+  res.json({ data });
+});
 exports.listNotifications = catchAsync(async (req, res) => {
   const { items, meta } = await platformService.listNotifications(req.user, req.query);
   res.json({ data: items, meta });

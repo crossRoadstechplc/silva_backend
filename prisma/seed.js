@@ -11,6 +11,7 @@ async function main() {
   await prisma.audit_log.deleteMany();
   await prisma.notifications.deleteMany();
   await prisma.attachments.deleteMany();
+  await prisma.activity_requests.deleteMany();
   await prisma.ifs_forms.deleteMany();
   await prisma.season_windows.deleteMany();
   await prisma.season_calendars.deleteMany();
@@ -147,7 +148,7 @@ async function main() {
     });
   }
 
-  await user("usr_silva_owner", "Silva Owner", "owner@silva.example", "silva_owner", silva.id);
+  const silvaOwner = await user("usr_silva_owner", "Silva Owner", "owner@silva.example", "silva_owner", silva.id);
   await user("usr_silva_cm", "Naomi Tesfaye", "naomi@silva.example", "silva_country_manager", silva.id);
   await user("usr_silva_fin", "Silva Finance", "finance@silva.example", "silva_finance", silva.id);
   const principal = await user("usr_spx_principal", "SPX Principal", "principal@spx.example", "spx_principal", spx.id);
@@ -155,6 +156,7 @@ async function main() {
   await user("usr_spx_supervisor", "SPX Field Supervisor", "supervisor@spx.example", "spx_field_supervisor", spx.id);
   await user("usr_spx_admin", "System Admin", "admin@spx.example", "system_admin", spx.id);
   await user("usr_bagro_admin", "B-Agro Admin", "admin@bagro.example", "vendor_admin", bagroOrg.id, bagro.id);
+  const bagroManager = await user("usr_bagro_manager", "B-Agro Manager", "manager@bagro.example", "vendor_manager", bagroOrg.id, bagro.id);
   const lead = await user("usr_bagro_lead", "Dawit Bekele", "lead@bagro.example", "vendor_field_lead", bagroOrg.id, bagro.id);
   await user("usr_bagro_super", "B-Agro Supervisor", "supervisor@bagro.example", "vendor_supervisor", bagroOrg.id, bagro.id);
   await user("usr_bagro_worker", "B-Agro Worker", "worker@bagro.example", "vendor_worker", bagroOrg.id, bagro.id);
@@ -576,7 +578,10 @@ async function main() {
         payload: { crewCount: 18, hoursWorked: 8, blocks: "1-4", summary: "Pruning progressing on schedule" },
         status: "validated",
         submittedByUserId: lead.id,
+        reviewedByUserId: bagroManager.id,
+        reviewedAt: new Date("2026-01-15T00:00:00.000Z"),
         validatedByUserId: handler.id,
+        includeInSilvaReport: true,
         notes: "Linked to WO-0001",
       },
       {
@@ -602,6 +607,21 @@ async function main() {
         submittedByUserId: lead.id,
       },
     ],
+  });
+
+  await prisma.activity_requests.create({
+    data: {
+      id: "act_01",
+      programId: program.id,
+      requestType: "coffee_testing",
+      origin: "silva_request",
+      title: "Export lot cupping — Lot X",
+      description: "Silva requested sensory panel before export commitment.",
+      urgency: "normal",
+      blocksOrAreas: "Block 3",
+      status: "submitted",
+      requestedByUserId: silvaOwner.id,
+    },
   });
 
   await prisma.vendor_scorecards.create({

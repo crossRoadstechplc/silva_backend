@@ -24,6 +24,8 @@ ifsFormRoutes.post("/", requireRole(VENDOR_OR_SPX), validate(schemas.ifsFormCrea
 ifsFormRoutes.get("/:formId", fieldOps.ifsFindOne);
 ifsFormRoutes.patch("/:formId", requireRole(VENDOR_OR_SPX), auditLog("ifs_form"), fieldOps.ifsUpdate);
 ifsFormRoutes.post("/:formId/submit", requireRole(VENDOR_OR_SPX), auditLog("ifs_form"), fieldOps.ifsSubmit);
+ifsFormRoutes.post("/:formId/vendor-review", requireRole(["vendor_manager", "vendor_supervisor", "vendor_admin"]), auditLog("ifs_form"), fieldOps.ifsVendorReview);
+ifsFormRoutes.patch("/:formId/include-in-report", requireRole(SPX), validate(schemas.ifsIncludeInReport), fieldOps.ifsIncludeInReport);
 ifsFormRoutes.post("/:formId/validate", requireRole(SPX), auditLog("ifs_form"), fieldOps.ifsValidate);
 ifsFormRoutes.post("/:formId/reject", requireRole(SPX), validate(schemas.reasonBody), auditLog("ifs_form"), fieldOps.ifsReject);
 

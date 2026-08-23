@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const prisma = require("../config/database");
+const reportBuilder = require("./reportBuilder.service");
 const env = require("../config/env");
 const AppError = require("../utils/AppError");
 const { uuid, nextTextId } = require("../utils/ids");
@@ -228,9 +229,46 @@ exports.releaseReport = async (id, user) => {
   if (!row.narrative) {
     throw new AppError(422, "BUSINESS_RULE_VIOLATION", "Cannot release a report with empty narrative.");
   }
+  const year = Number(String(row.period).slice(0, 4)) || new Date().getUTCFullYear();
+  const extraSections = await reportBuilder.buildReleaseSections(user, year);
+  const sections = {
+    ...(row.sections || {}),
+    executive_summary: row.narrative,
+    ...extraSections,
+  };
   const updated = await prisma.reports.update({
     where: { id },
-    data: { status: "released", visibleToSilva: true, releasedAt: new Date(), releasedByUserId: user.id },
+    data: {
+      status: "released",
+      visibleToSilva: true,
+      releasedAt: new Date(),
+      releasedByUserId: user.id,
+      sections,
+    },
+  });
+  return reportJson(updated);
+};
+
+exports.listCuratableLogs = async (user) => {
+  if (!isSpxRole(user.role)) throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
+  return reportBuilder.listCuratableLogs(user);
+};
+
+exports.patchReportSections = async (id, dto, user) => {
+  if (!isSpxRole(user.role)) throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
+  const row = await prisma.reports.findFirst({ where: scopedWhere(user, { id }) });
+  if (!row) throw new AppError(404, "NOT_FOUND", "Report not found.");
+  if (dto.includeLogIds?.length) {
+    await prisma.ifs_forms.updateMany({
+      where: scopedWhere(user, { id: { in: dto.includeLogIds }, status: "validated" }),
+      data: { includeInSilvaReport: true },
+    });
+  }
+  const year = Number(String(row.period).slice(0, 4)) || new Date().getUTCFullYear();
+  const extraSections = await reportBuilder.buildReleaseSections(user, year);
+  const updated = await prisma.reports.update({
+    where: { id },
+    data: { sections: { ...(row.sections || {}), ...extraSections } },
   });
   return reportJson(updated);
 };

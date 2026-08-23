@@ -22,7 +22,8 @@ afpRoutes.post("/:afpLineId/close", requireRole(["spx_principal"]), auditLog("af
 const afeRoutes = express.Router();
 afeRoutes.use(authenticateJWT);
 afeRoutes.get("/", planning.findAllAfe);
-afeRoutes.post("/", requireRole(["spx_principal", "spx_account_handler", "vendor_admin", "vendor_manager", "vendor_field_lead"]), validate(schemas.afeCreate), auditLog("afe"), planning.createAfe);
+afeRoutes.post("/", requireRole(["spx_principal", "spx_account_handler", "vendor_manager", "vendor_admin"]), validate(schemas.afeCreate), auditLog("afe"), planning.createAfe);
+afeRoutes.get("/intake/vendor", planning.listIntakeVendorAfes);
 afeRoutes.get("/:afeId", planning.findOneAfe);
 afeRoutes.patch("/:afeId", auditLog("afe"), planning.updateAfe);
 afeRoutes.post("/:afeId/submit", auditLog("afe"), planning.submitAfe);

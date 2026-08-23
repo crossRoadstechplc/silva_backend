@@ -9,6 +9,7 @@ const env = require("./config/env");
 const openapi = require("./docs/openapi.json");
 
 const authRoutes = require("./routes/auth.routes");
+const activityRequestRoutes = require("./routes/activityRequest.routes");
 const programRoutes = require("./routes/program.routes");
 const { orgRouter, inviteRouter, userRouter, membershipRouter } = require("./routes/identity.routes");
 const { afpRoutes, afeRoutes } = require("./routes/afe.routes");
@@ -66,16 +67,17 @@ app.get("/local-download/:storageKey", (req, res) => {
   res.sendFile(dest);
 });
 
+const requireProgramAccess = require("./middleware/requireProgramAccess");
+const authenticateJWT = require("./middleware/authenticateJWT");
+const programScoped = [authenticateJWT, requireProgramAccess];
+
 app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/activity-requests", ...programScoped, activityRequestRoutes);
 app.use("/api/v1/programs", programRoutes);
 app.use("/api/v1/organizations", orgRouter);
 app.use("/api/v1/invites", inviteRouter);
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/memberships", membershipRouter);
-
-const requireProgramAccess = require("./middleware/requireProgramAccess");
-const authenticateJWT = require("./middleware/authenticateJWT");
-const programScoped = [authenticateJWT, requireProgramAccess];
 app.use("/api/v1/dashboard", ...programScoped, dashboardRoutes);
 app.use("/api/v1/afp-lines", ...programScoped, afpRoutes);
 app.use("/api/v1/afes", ...programScoped, afeRoutes);

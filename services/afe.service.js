@@ -7,6 +7,7 @@ const { afeJson, auditJson } = require("../utils/serializers");
 const { isVendorRole, isSpxRole } = require("../utils/roles");
 const { createNotification } = require("../jobs/queues");
 const { scopedWhere, programCreateData, requireProgramId } = require("./utils/programScope");
+const { assertAfpBudgetAvailable } = require("./utils/afpBudget");
 
 async function getThresholds(programId) {
   const rows = await prisma.schedule3_thresholds.findMany({ where: { programId } });
@@ -20,6 +21,57 @@ async function getThresholds(programId) {
       ];
 }
 
+function resolvePlanning(dto, user) {
+  let planningMode = dto.planningMode || "planned";
+  let origin = dto.origin || "spx_initiated";
+  if (isVendorRole(user.role)) {
+    planningMode = "ad_hoc";
+    origin = "vendor_request";
+  }
+  return { planningMode, origin };
+}
+
+async function createAfeRecord(dto, user, extra = {}) {
+  const programId = requireProgramId(user);
+  const { planningMode, origin } = resolvePlanning(dto, user);
+  const afpLineId = dto.afpLineId || null;
+
+  if (planningMode === "planned" && !afpLineId) {
+    throw new AppError(422, "BUSINESS_RULE_VIOLATION", "Planned AFEs require an AFP line.");
+  }
+
+  if (afpLineId) {
+    await assertAfpBudgetAvailable({
+      programId,
+      afpLineId,
+      additionalUsd: dto.estimatedCostUsd,
+      excludeAfeId: extra.excludeAfeId,
+    });
+  }
+
+  const thresholds = await getThresholds(programId);
+  const band = computeBand(dto.estimatedCostUsd, thresholds);
+  const silvaApprovalRequired = band === "C" || band === "D";
+  const id = await nextTextId("afe", "AFE");
+
+  const afe = await prisma.afes.create({
+    data: programCreateData(user, {
+      id,
+      afpLineId,
+      operatingDiscipline: dto.operatingDiscipline,
+      description: dto.description,
+      estimatedCostUsd: decimal(dto.estimatedCostUsd),
+      band,
+      planningMode,
+      origin,
+      activityRequestId: dto.activityRequestId || null,
+      silvaApprovalRequired,
+      createdByUserId: user.id,
+    }),
+  });
+  return afeJson(afe);
+}
+
 exports.findAll = async (query, user) => {
   if (isVendorRole(user.role)) {
     throw new AppError(403, "FORBIDDEN", "Vendors cannot access AFE register");
@@ -29,6 +81,7 @@ exports.findAll = async (query, user) => {
   if (statuses.length) where.status = { in: statuses };
   if (query.band) where.band = query.band;
   if (query.afpLineId) where.afpLineId = query.afpLineId;
+  if (query.planningMode) where.planningMode = query.planningMode;
   if (query.silvaApprovalRequired === "true") where.silvaApprovalRequired = true;
   if (query.silvaApprovalRequired === "false") where.silvaApprovalRequired = false;
   const [rows, total] = await Promise.all([
@@ -47,28 +100,9 @@ exports.findOne = async (id, user) => {
   return afeJson(afe);
 };
 
-exports.create = async (dto, user) => {
-  const programId = requireProgramId(user);
-  const afp = await prisma.afp_lines.findFirst({ where: { id: dto.afpLineId, programId } });
-  if (!afp) throw new AppError(404, "NOT_FOUND", "AFP line not found.");
-  const thresholds = await getThresholds(programId);
-  const band = computeBand(dto.estimatedCostUsd, thresholds);
-  const silvaApprovalRequired = band === "C" || band === "D";
-  const id = await nextTextId("afe", "AFE");
-  const afe = await prisma.afes.create({
-    data: programCreateData(user, {
-      id,
-      afpLineId: dto.afpLineId,
-      operatingDiscipline: dto.operatingDiscipline,
-      description: dto.description,
-      estimatedCostUsd: decimal(dto.estimatedCostUsd),
-      band,
-      silvaApprovalRequired,
-      createdByUserId: user.id,
-    }),
-  });
-  return afeJson(afe);
-};
+exports.create = async (dto, user) => createAfeRecord(dto, user);
+
+exports.createFromIntake = async (dto, user) => createAfeRecord(dto, user);
 
 exports.update = async (id, dto, user) => {
   const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }) });
@@ -78,6 +112,15 @@ exports.update = async (id, dto, user) => {
     throw new AppError(404, "NOT_FOUND", "AFE not found");
   }
   const cost = dto.estimatedCostUsd !== undefined ? dto.estimatedCostUsd : Number(afe.estimatedCostUsd);
+  const afpLineId = dto.afpLineId !== undefined ? dto.afpLineId : afe.afpLineId;
+  if (afe.planningMode === "planned" && afpLineId) {
+    await assertAfpBudgetAvailable({
+      programId: requireProgramId(user),
+      afpLineId,
+      additionalUsd: cost,
+      excludeAfeId: id,
+    });
+  }
   const thresholds = await getThresholds(requireProgramId(user));
   const band = computeBand(cost, thresholds);
   const updated = await prisma.afes.update({
@@ -86,6 +129,7 @@ exports.update = async (id, dto, user) => {
       operatingDiscipline: dto.operatingDiscipline ?? afe.operatingDiscipline,
       description: dto.description ?? afe.description,
       estimatedCostUsd: decimal(cost),
+      afpLineId: afpLineId || null,
       band,
       silvaApprovalRequired: band === "C" || band === "D",
     },
@@ -209,7 +253,7 @@ exports.close = async (id, user) => {
   return afeJson(updated);
 };
 
-exports.getHistory = async (id) => {
+exports.getHistory = async (id, user) => {
   const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }) });
   if (!afe) throw new AppError(404, "NOT_FOUND", "AFE not found");
   const rows = await prisma.audit_log.findMany({
@@ -217,4 +261,15 @@ exports.getHistory = async (id) => {
     orderBy: { timestamp: "desc" },
   });
   return rows.map(auditJson);
+};
+
+exports.listIntakeVendorAfes = async (query, user) => {
+  if (!isSpxRole(user.role)) throw new AppError(403, "FORBIDDEN", "Insufficient permissions.");
+  const { page, pageSize, skip, take } = parseListQuery(query);
+  const where = scopedWhere(user, { planningMode: "ad_hoc", origin: "vendor_request", status: "draft" });
+  const [rows, total] = await Promise.all([
+    prisma.afes.findMany({ where, skip, take, orderBy: { createdAt: "desc" } }),
+    prisma.afes.count({ where }),
+  ]);
+  return { items: rows.map(afeJson), meta: meta(page, pageSize, total) };
 };

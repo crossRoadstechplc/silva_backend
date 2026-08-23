@@ -88,8 +88,11 @@ function formJson(row) {
     payload: row.payload || {},
     status: row.status,
     submittedByUserId: row.submittedByUserId,
+    reviewedByUserId: row.reviewedByUserId || null,
+    reviewedAt: row.reviewedAt ? row.reviewedAt.toISOString() : null,
     validatedByUserId: row.validatedByUserId,
     rejectionReason: row.rejectionReason,
+    includeInSilvaReport: Boolean(row.includeInSilvaReport),
     notes: row.notes,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -110,7 +113,8 @@ exports.findAll = async (query, user) => {
   if (query.status) where.status = query.status;
   if (query.workOrderId) where.workOrderId = query.workOrderId;
   if (query.fieldTicketId) where.fieldTicketId = query.fieldTicketId;
-  if (isVendorRole(user.role) && user.role !== "vendor_admin") {
+  if (query.pendingReview === "true") where.status = "submitted";
+  if (isVendorRole(user.role) && user.role === "vendor_worker") {
     where.submittedByUserId = user.id;
   }
   const [rows, total] = await Promise.all([
@@ -198,15 +202,47 @@ exports.submit = async (id, user) => {
   return formJson(row);
 };
 
+exports.vendorReview = async (id, user) => {
+  assertNotSilva(user);
+  const allowed = ["vendor_manager", "vendor_supervisor", "vendor_admin"];
+  if (!allowed.includes(user.role)) {
+    throw new AppError(403, "FORBIDDEN", "Only vendor managers or supervisors can review IFS forms.");
+  }
+  const existing = await prisma.ifs_forms.findFirst({ where: scopedWhere(user, { id }) });
+  if (!existing) throw new AppError(404, "NOT_FOUND", "IFS form not found.");
+  if (existing.status !== "submitted") throw new AppError(400, "INVALID_STATE", "Form must be submitted first.");
+  if (existing.submittedByUserId === user.id) {
+    throw new AppError(409, "MAKER_CHECKER_VIOLATION", "Submitter cannot review own form.");
+  }
+  const row = await prisma.ifs_forms.update({
+    where: { id },
+    data: { status: "vendor_reviewed", reviewedByUserId: user.id, reviewedAt: new Date() },
+  });
+  return formJson(row);
+};
+
 exports.validate = async (id, user) => {
   if (!isSpxRole(user.role)) throw new AppError(403, "FORBIDDEN", "Only SPX can validate IFS forms.");
   const existing = await prisma.ifs_forms.findFirst({ where: scopedWhere(user, { id }) });
   if (!existing) throw new AppError(404, "NOT_FOUND", "IFS form not found.");
-  if (existing.status !== "submitted") throw new AppError(400, "INVALID_STATE", "Form must be submitted first.");
+  if (existing.status !== "vendor_reviewed") {
+    throw new AppError(400, "INVALID_STATE", "Form must be vendor-reviewed before SPX validation.");
+  }
   const row = await prisma.ifs_forms.update({
     where: { id },
     data: { status: "validated", validatedByUserId: user.id, rejectionReason: null },
   });
+  return formJson(row);
+};
+
+exports.setIncludeInReport = async (id, includeInSilvaReport, user) => {
+  if (!isSpxRole(user.role)) throw new AppError(403, "FORBIDDEN", "Only SPX can curate report logs.");
+  const existing = await prisma.ifs_forms.findFirst({ where: scopedWhere(user, { id }) });
+  if (!existing) throw new AppError(404, "NOT_FOUND", "IFS form not found.");
+  if (existing.status !== "validated") {
+    throw new AppError(400, "INVALID_STATE", "Only validated forms can be included in Silva reports.");
+  }
+  const row = await prisma.ifs_forms.update({ where: { id }, data: { includeInSilvaReport } });
   return formJson(row);
 };
 

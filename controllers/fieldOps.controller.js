@@ -30,6 +30,18 @@ exports.ifsValidate = catchAsync(async (req, res) => {
   const data = await ifsFormService.validate(req.params.formId, req.user);
   res.json({ data });
 });
+exports.ifsVendorReview = catchAsync(async (req, res) => {
+  const data = await ifsFormService.vendorReview(req.params.formId, req.user);
+  res.json({ data });
+});
+exports.ifsIncludeInReport = catchAsync(async (req, res) => {
+  const data = await ifsFormService.setIncludeInReport(
+    req.params.formId,
+    req.validatedBody.includeInSilvaReport,
+    req.user,
+  );
+  res.json({ data });
+});
 exports.ifsReject = catchAsync(async (req, res) => {
   const data = await ifsFormService.reject(req.params.formId, req.validatedBody.reason, req.user);
   res.json({ data });

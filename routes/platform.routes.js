@@ -65,7 +65,9 @@ reportRoutes.post("/generate/weekly", requireRole(SPX), platform.generateWeekly)
 reportRoutes.post("/generate/monthly", requireRole(SPX), platform.generateMonthly);
 reportRoutes.post("/generate/quarterly", requireRole(SPX), platform.generateQuarterly);
 reportRoutes.post("/generate/annual", requireRole(SPX), platform.generateAnnual);
+reportRoutes.get("/curatable-logs/list", requireRole(SPX), platform.listCuratableLogs);
 reportRoutes.get("/:reportId", platform.findReport);
+reportRoutes.patch("/:reportId/sections", requireRole(SPX), validate(schemas.reportSectionsPatch), platform.patchReportSections);
 reportRoutes.patch("/:reportId/narrative", requireRole(SPX), platform.patchNarrative);
 reportRoutes.post("/:reportId/release", requireRole(["spx_principal", "spx_account_handler"]), auditLog("report"), platform.releaseReport);
 
