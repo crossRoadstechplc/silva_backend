@@ -14,6 +14,7 @@ afpRoutes.use(authenticateJWT);
 afpRoutes.get("/", planning.findAllAfp);
 afpRoutes.post("/", requireRole(SPX_PLAN), validate(schemas.afpCreate), auditLog("afp_line"), planning.createAfp);
 afpRoutes.get("/:afpLineId", planning.findOneAfp);
+afpRoutes.get("/:afpLineId/schedule", planning.afpSchedule);
 afpRoutes.patch("/:afpLineId", requireRole(SPX_PLAN), auditLog("afp_line"), planning.updateAfp);
 afpRoutes.post("/:afpLineId/submit", requireRole(SPX_PLAN), auditLog("afp_line"), planning.submitAfp);
 afpRoutes.post("/:afpLineId/approve", requireRole(SILVA_APPROVE), auditLog("afp_line"), planning.approveAfp);

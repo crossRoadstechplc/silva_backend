@@ -76,6 +76,18 @@ exports.cancelTask = catchAsync(async (req, res) => {
   const data = await workOrderService.cancelTask(req.params.taskId);
   res.json({ data });
 });
+exports.listBlocks = catchAsync(async (req, res) => {
+  const data = await workOrderService.listBlocks(req.user);
+  res.json({ data });
+});
+exports.listBlockAssignments = catchAsync(async (req, res) => {
+  const data = await workOrderService.listBlockAssignments(req.params.workOrderId);
+  res.json({ data });
+});
+exports.addBlockAssignment = catchAsync(async (req, res) => {
+  const data = await workOrderService.addBlockAssignment(req.params.workOrderId, req.body, req.user);
+  res.status(201).json({ data });
+});
 
 exports.findAllFt = catchAsync(async (req, res) => {
   const { items, meta } = await fieldTicketService.findAll(req.query, req.user);

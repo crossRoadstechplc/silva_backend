@@ -39,6 +39,7 @@ dashboardRoutes.use(authenticateJWT);
 dashboardRoutes.get("/silva-owner", requireRole([...SILVA, ...SPX]), platform.silvaOwner);
 dashboardRoutes.get("/spx-management", requireRole(SPX), platform.spxManagement);
 dashboardRoutes.get("/vendor-field", platform.vendorField);
+dashboardRoutes.get("/action-queues", platform.actionQueues);
 dashboardRoutes.get("/notifications", platform.dashboardNotifications);
 
 const PRINCIPAL = ["spx_principal"];
@@ -94,7 +95,7 @@ accountabilityRoutes.patch("/:operatingDiscipline", requireRole(["spx_principal"
 const schedule3Routes = express.Router();
 schedule3Routes.use(authenticateJWT);
 schedule3Routes.get("/", platform.listSchedule3);
-schedule3Routes.patch("/:band", requireRole(["spx_principal"]), platform.patchSchedule3);
+schedule3Routes.patch("/:band", requireRole(["spx_principal", "system_admin"]), platform.patchSchedule3);
 
 const schedule4Routes = express.Router();
 schedule4Routes.use(authenticateJWT);

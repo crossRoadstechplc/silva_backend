@@ -20,6 +20,7 @@ const ROLE_PERMISSIONS = {
     "work_orders.read",
     "payment_requests.read_verified",
     "settlements.read",
+    "settlements.mark_settled",
     "reports.read_released",
     "vendors.read_summary",
     "dashboard.silva_owner",

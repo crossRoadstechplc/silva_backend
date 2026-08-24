@@ -77,7 +77,11 @@ exports.spxManagement = catchAsync(async (req, res) => {
   res.json({ data });
 });
 exports.vendorField = catchAsync(async (req, res) => {
-  const data = await dashboardService.vendorField(req.user);
+  const data = await dashboardService.vendorField(req.user, req.query);
+  res.json({ data });
+});
+exports.actionQueues = catchAsync(async (req, res) => {
+  const data = await dashboardService.actionQueues(req.user, req.query);
   res.json({ data });
 });
 exports.dashboardNotifications = catchAsync(async (req, res) => {

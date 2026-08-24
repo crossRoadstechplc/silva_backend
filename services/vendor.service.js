@@ -3,17 +3,47 @@ const AppError = require("../utils/AppError");
 const { uuid } = require("../utils/ids");
 const { decimal, parseListQuery, meta, isoDate } = require("../utils/helpers");
 const { vendorJson, contractJson, scorecardJson, userJson } = require("../utils/serializers");
-const { isVendorRole, isSpxRole } = require("../utils/roles");
+const { isVendorRole, isSpxRole, isSilvaRole } = require("../utils/roles");
+const { requireProgramId } = require("./utils/programScope");
 const authService = require("./auth.service");
+
+async function assignedVendorIdsForSilva(user) {
+  const programId = requireProgramId(user);
+  const maps = await prisma.farm_estate_vendors.findMany({
+    where: {
+      farmEstate: {
+        programId,
+        ownerOrganizationId: user.organizationId,
+        status: "active",
+      },
+    },
+    select: { vendorId: true },
+    distinct: ["vendorId"],
+  });
+  return maps.map((m) => m.vendorId);
+}
+
+async function assertSilvaVendorAccess(user, vendorId) {
+  if (!isSilvaRole(user.role)) return;
+  const vendorIds = await assignedVendorIdsForSilva(user);
+  if (!vendorIds.includes(vendorId)) {
+    throw new AppError(404, "NOT_FOUND", "Vendor not found.");
+  }
+}
 
 exports.findAll = async (query, user) => {
   if (isVendorRole(user.role)) {
     throw new AppError(403, "FORBIDDEN", "Vendors cannot list other vendors.");
   }
   const { page, pageSize, skip, take } = parseListQuery(query);
+  const where = {};
+  if (isSilvaRole(user.role)) {
+    const vendorIds = await assignedVendorIdsForSilva(user);
+    where.id = { in: vendorIds.length ? vendorIds : ["__none__"] };
+  }
   const [rows, total] = await Promise.all([
-    prisma.vendors.findMany({ skip, take, orderBy: { createdAt: "desc" } }),
-    prisma.vendors.count(),
+    prisma.vendors.findMany({ where, skip, take, orderBy: { createdAt: "desc" } }),
+    prisma.vendors.count({ where }),
   ]);
   return { items: rows.map(vendorJson), meta: meta(page, pageSize, total) };
 };
@@ -24,6 +54,7 @@ exports.findOne = async (id, user) => {
   if (isVendorRole(user.role) && row.id !== user.vendorId) {
     throw new AppError(404, "NOT_FOUND", "Vendor not found.");
   }
+  await assertSilvaVendorAccess(user, id);
   return vendorJson(row);
 };
 
@@ -96,6 +127,7 @@ exports.listUsers = async (vendorId, user, query) => {
   if (isVendorRole(user.role) && user.vendorId !== vendorId) {
     throw new AppError(404, "NOT_FOUND", "Vendor not found.");
   }
+  await assertSilvaVendorAccess(user, vendorId);
   return authService.listUsers({ ...user, role: isVendorRole(user.role) ? user.role : "spx_principal", vendorId }, {
     ...query,
     vendorId,
@@ -112,6 +144,10 @@ exports.listContracts = async (query, user) => {
   const { page, pageSize, skip, take } = parseListQuery(query);
   const where = {};
   if (isVendorRole(user.role)) where.vendorId = user.vendorId;
+  if (isSilvaRole(user.role)) {
+    const vendorIds = await assignedVendorIdsForSilva(user);
+    where.vendorId = { in: vendorIds.length ? vendorIds : ["__none__"] };
+  }
   if (query.vendorId) where.vendorId = query.vendorId;
   if (query.afeId) where.afeId = query.afeId;
   if (query.tenderStatus) where.tenderStatus = query.tenderStatus;
@@ -149,6 +185,7 @@ exports.findContract = async (id, user) => {
   if (isVendorRole(user.role) && row.vendorId !== user.vendorId) {
     throw new AppError(404, "NOT_FOUND", "Contract not found.");
   }
+  await assertSilvaVendorAccess(user, row.vendorId);
   return contractJson(row);
 };
 
@@ -176,7 +213,14 @@ exports.listScorecards = async (query, user) => {
   const { page, pageSize, skip, take } = parseListQuery(query);
   const where = {};
   if (isVendorRole(user.role)) where.vendorId = user.vendorId;
-  if (query.vendorId) where.vendorId = query.vendorId;
+  if (isSilvaRole(user.role)) {
+    const vendorIds = await assignedVendorIdsForSilva(user);
+    where.vendorId = { in: vendorIds.length ? vendorIds : ["__none__"] };
+  }
+  if (query.vendorId) {
+    await assertSilvaVendorAccess(user, query.vendorId);
+    where.vendorId = query.vendorId;
+  }
   if (query.reviewPeriod) where.reviewPeriod = query.reviewPeriod;
   const [rows, total] = await Promise.all([
     prisma.vendor_scorecards.findMany({ where, skip, take, orderBy: { createdAt: "desc" } }),

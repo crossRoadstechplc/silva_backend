@@ -1,0 +1,123 @@
+{
+  "source": "B-Agro Coffee Product PLC — Chetu Farm Annual Work Plan 2018/19 EC (2025/26 GC)",
+  "fxEtbPerUsd": 130,
+  "sections": [
+    {
+      "sectionCode": "nursery",
+      "sectionLabel": "I. Nursery Operations",
+      "afpLineId": "AFP-2026-001",
+      "afp": {
+        "activity": "Nursery program — 60,000 seedlings",
+        "budgetEtb": 59300,
+        "budgetUsd": 456,
+        "kpiTarget": "Seedling survival ≥85%",
+        "notes": "Blocks B, C, F, G · 15.01 ha · 60,000 seedlings · B-Agro submitted plan"
+      },
+      "scope": { "blocks": ["B", "C", "F", "G"], "areaHa": 15.01, "seedlings": 60000 },
+      "activities": [
+        { "id": "NUR-01", "nameEn": "Land clearing", "nameAm": "መሬት ማጽዳት", "unit": "ha", "annualQuantity": 15.01, "annualMandays": 120, "annualCostEtb": 6000, "normWageEtb": 50, "normMdPerUnit": 7.99, "normsPerMd": 0.125 },
+        { "id": "NUR-02", "nameEn": "Tree felling", "nameAm": "ዛፍ መቁረጥ", "unit": "ha", "annualQuantity": 15.01, "annualMandays": 90, "annualCostEtb": 4500, "normWageEtb": 50, "normMdPerUnit": 5.99, "normsPerMd": 0.167 },
+        { "id": "NUR-03", "nameEn": "Soil heaping", "nameAm": "አፈር መከማቸት", "unit": "m3", "annualQuantity": 500, "annualMandays": 100, "annualCostEtb": 5000, "normWageEtb": 50, "normMdPerUnit": 0.2, "normsPerMd": 5 },
+        { "id": "NUR-04", "nameEn": "Cutting polytube", "nameAm": "ፖሊቱብ መቁረጥ", "unit": "No", "annualQuantity": 60000, "annualMandays": 80, "annualCostEtb": 4000, "normWageEtb": 50, "normMdPerUnit": 0.00133, "normsPerMd": 750 },
+        { "id": "NUR-05", "nameEn": "Filling polytube", "nameAm": "ፖሊቱብ መሙላት", "unit": "No", "annualQuantity": 60000, "annualMandays": 200, "annualCostEtb": 12000, "normWageEtb": 60, "normMdPerUnit": 0.00333, "normsPerMd": 300 },
+        { "id": "NUR-06", "nameEn": "Seed bed preparation", "nameAm": "የዘር አልጋ ማዘጋጀት", "unit": "bed", "annualQuantity": 40, "annualMandays": 60, "annualCostEtb": 3600, "normWageEtb": 60, "normMdPerUnit": 1.5, "normsPerMd": 0.667 },
+        { "id": "NUR-07", "nameEn": "Arranging polytube", "nameAm": "ፖሊቱብ ማስተካከል", "unit": "No", "annualQuantity": 60000, "annualMandays": 100, "annualCostEtb": 6000, "normWageEtb": 60, "normMdPerUnit": 0.00167, "normsPerMd": 600 },
+        { "id": "NUR-08", "nameEn": "Sowing", "nameAm": "መዝራት", "unit": "No", "annualQuantity": 60000, "annualMandays": 80, "annualCostEtb": 4800, "normWageEtb": 60, "normMdPerUnit": 0.00133, "normsPerMd": 750 },
+        { "id": "NUR-09", "nameEn": "Mulch preparation", "nameAm": "ማልቺ ማዘጋጀት", "unit": "m3", "annualQuantity": 200, "annualMandays": 70, "annualCostEtb": 4200, "normWageEtb": 60, "normMdPerUnit": 0.35, "normsPerMd": 2.857 },
+        { "id": "NUR-10", "nameEn": "Mulching", "nameAm": "ማልቺ መደራጀት", "unit": "No", "annualQuantity": 60000, "annualMandays": 90, "annualCostEtb": 5400, "normWageEtb": 60, "normMdPerUnit": 0.0015, "normsPerMd": 667 },
+        { "id": "NUR-11", "nameEn": "Shade mat preparation", "nameAm": "ጥላ መጠን ማዘጋጀት", "unit": "m2", "annualQuantity": 2000, "annualMandays": 50, "annualCostEtb": 3500, "normWageEtb": 70, "normMdPerUnit": 0.025, "normsPerMd": 40 },
+        { "id": "NUR-12", "nameEn": "Shade construction", "nameAm": "ጥላ ግንባታ", "unit": "m2", "annualQuantity": 2000, "annualMandays": 80, "annualCostEtb": 5600, "normWageEtb": 70, "normMdPerUnit": 0.04, "normsPerMd": 25 },
+        { "id": "NUR-13", "nameEn": "Mulch removal", "nameAm": "ማልቺ ማስወገድ", "unit": "No", "annualQuantity": 60000, "annualMandays": 60, "annualCostEtb": 3600, "normWageEtb": 60, "normMdPerUnit": 0.001, "normsPerMd": 1000 },
+        { "id": "NUR-14", "nameEn": "Weeding", "nameAm": "አረም ማረም", "unit": "No", "annualQuantity": 60000, "annualMandays": 86, "annualCostEtb": 5160, "normWageEtb": 60, "normMdPerUnit": 0.00143, "normsPerMd": 698 },
+        { "id": "NUR-15", "nameEn": "Thinning shade", "nameAm": "ጥላ ማሳንስ", "unit": "No", "annualQuantity": 60000, "annualMandays": 40, "annualCostEtb": 2800, "normWageEtb": 70, "normMdPerUnit": 0.00067, "normsPerMd": 1500 },
+        { "id": "NUR-16", "nameEn": "Shade removal", "nameAm": "ጥላ ማስወገድ", "unit": "m2", "annualQuantity": 2000, "annualMandays": 40, "annualCostEtb": 2740, "normWageEtb": 68.5, "normMdPerUnit": 0.02, "normsPerMd": 50 }
+      ]
+    },
+    {
+      "sectionCode": "young_coffee",
+      "sectionLabel": "II. Young Coffee Care",
+      "afpLineId": "AFP-2026-002",
+      "afp": {
+        "activity": "Young coffee care — Blocks A–G",
+        "budgetEtb": 387400,
+        "budgetUsd": 2980,
+        "kpiTarget": "Cover crop compliance 100%",
+        "notes": "257,400 trees · Blocks A–G · B-Agro submitted plan"
+      },
+      "scope": { "blocks": ["A", "B", "C", "D", "E", "F", "G"], "trees": 257400, "grossAreaHa": 128.9 },
+      "activities": [
+        { "id": "YNG-01", "nameEn": "Hoeing", "nameAm": "ኩትኳቶ", "unit": "No", "annualQuantity": 160000, "annualMandays": 1600, "annualCostEtb": 96000, "normWageEtb": 60, "normMdPerUnit": 0.01, "normsPerMd": 100 },
+        { "id": "YNG-02", "nameEn": "Fertilizing", "nameAm": "ማዳበሪያ መነስነስ", "unit": "No", "annualQuantity": 257400, "annualMandays": 400, "annualCostEtb": 32000, "normWageEtb": 80, "normMdPerUnit": 0.00155, "normsPerMd": 643.5 },
+        { "id": "YNG-03", "nameEn": "Ring weeding of seedlings", "nameAm": "የችግኝ ዙሪያ አረም", "unit": "No", "annualQuantity": 257400, "annualMandays": 800, "annualCostEtb": 48000, "normWageEtb": 60, "normMdPerUnit": 0.00311, "normsPerMd": 321.75 },
+        { "id": "YNG-04", "nameEn": "Shade tree regulation", "nameAm": "የጥላ ዛፍ ተከላ/ተቆርጦ", "unit": "No", "annualQuantity": 5000, "annualMandays": 1200, "annualCostEtb": 96000, "normWageEtb": 80, "normMdPerUnit": 0.24, "normsPerMd": 4.167 },
+        { "id": "YNG-05", "nameEn": "Compost preparation", "nameAm": "ኮምፖስት ማዘጋጀት", "unit": "m3", "annualQuantity": 500, "annualMandays": 330, "annualCostEtb": 59400, "normWageEtb": 180, "normMdPerUnit": 0.66, "normsPerMd": 1.515 },
+        { "id": "YNG-06", "nameEn": "Ridge construction", "nameAm": "እርከን ስራ", "unit": "No", "annualQuantity": 257400, "annualMandays": 1000, "annualCostEtb": 56000, "normWageEtb": 56, "normMdPerUnit": 0.00388, "normsPerMd": 257.4 }
+      ]
+    },
+    {
+      "sectionCode": "matured_coffee",
+      "sectionLabel": "III. Mature Coffee Main Care",
+      "afpLineId": "AFP-2026-003",
+      "afp": {
+        "activity": "Mature coffee maintenance — 129 ha",
+        "budgetEtb": 997016,
+        "budgetUsd": 7669,
+        "kpiTarget": "Pruning completion per schedule",
+        "notes": "128.97 ha · 257,400 productive trees · B-Agro submitted plan"
+      },
+      "scope": { "blocks": ["A", "B", "C", "D", "E", "F", "G"], "areaHa": 128.97, "productiveTrees": 257400 },
+      "activities": [
+        { "id": "MAT-01", "nameEn": "Manual weeding", "nameAm": "የእጅ አረም ማረም", "unit": "ha", "annualQuantity": 432, "annualMandays": 8079, "annualCostEtb": 561600, "normWageEtb": 69.5, "normMdPerUnit": 18.7, "normsPerMd": 0.0535 },
+        { "id": "MAT-02", "nameEn": "Chemical weeding", "nameAm": "የኬሚካል አረም ማረም", "unit": "ha", "annualQuantity": 140, "annualMandays": 140, "annualCostEtb": 56000, "normWageEtb": 400, "normMdPerUnit": 1, "normsPerMd": 1 },
+        { "id": "MAT-03", "nameEn": "Pruning", "nameAm": "የቡና ግዘዛ", "unit": "No", "annualQuantity": 157260, "annualMandays": 4194, "annualCostEtb": 251616, "normWageEtb": 60, "normMdPerUnit": 0.0267, "normsPerMd": 37.5 },
+        { "id": "MAT-04", "nameEn": "Topping", "nameAm": "የመሪ መቁረጥ", "unit": "No", "annualQuantity": 14000, "annualMandays": 140, "annualCostEtb": 8400, "normWageEtb": 60, "normMdPerUnit": 0.01, "normsPerMd": 100 },
+        { "id": "MAT-05", "nameEn": "Desuckering", "nameAm": "የቡቃያ መቁረጥ", "unit": "No", "annualQuantity": 158000, "annualMandays": 1580, "annualCostEtb": 110600, "normWageEtb": 70, "normMdPerUnit": 0.01, "normsPerMd": 100 },
+        { "id": "MAT-06", "nameEn": "Supplemental fertilizing", "nameAm": "የመካከለኛ ቡና ማዳበሪያ", "unit": "No", "annualQuantity": 4000, "annualMandays": 80, "annualCostEtb": 4800, "normWageEtb": 60, "normMdPerUnit": 0.02, "normsPerMd": 50 },
+        { "id": "MAT-07", "nameEn": "Watchman tower", "nameAm": "የጥበቃ ግንብ", "unit": "No", "annualQuantity": 8, "annualMandays": 80, "annualCostEtb": 4000, "normWageEtb": 50, "normMdPerUnit": 10, "normsPerMd": 0.1 }
+      ]
+    },
+    {
+      "sectionCode": "infilling",
+      "sectionLabel": "IV. Infilling Operations",
+      "afpLineId": "AFP-2026-004",
+      "afp": {
+        "activity": "Infilling program — 48,000 trees",
+        "budgetEtb": 271997,
+        "budgetUsd": 2092,
+        "kpiTarget": "Infilling survival ≥80%",
+        "notes": "Blocks B, C, F, G · 17.28 ha · 48,000 trees · Q4 (Jul–Sep)"
+      },
+      "scope": { "blocks": ["B", "C", "F", "G"], "areaHa": 17.28, "trees": 48000 },
+      "activities": [
+        { "id": "INF-01", "nameEn": "Peg preparation", "nameAm": "ችግኝ ማዘጋጀት", "unit": "No", "annualQuantity": 48000, "annualMandays": 320, "annualCostEtb": 22396.8, "normWageEtb": 70, "normMdPerUnit": 0.00667, "normsPerMd": 150, "schedule": [{ "month": 7, "quantity": 48000, "mandays": 320, "costEtb": 22396.8 }] },
+        { "id": "INF-02", "nameEn": "Layout & pegging", "nameAm": "ቀዳዳ ተከላ መከለል", "unit": "No", "annualQuantity": 48000, "annualMandays": 480, "annualCostEtb": 24000, "normWageEtb": 50, "normMdPerUnit": 0.01, "normsPerMd": 100, "schedule": [{ "month": 7, "quantity": 48000, "mandays": 480, "costEtb": 24000 }] },
+        { "id": "INF-03", "nameEn": "Holing", "nameAm": "ጉድጓድ መቆፈር", "unit": "No", "annualQuantity": 48000, "annualMandays": 2400, "annualCostEtb": 120000, "normWageEtb": 50, "normMdPerUnit": 0.05, "normsPerMd": 20, "schedule": [{ "month": 7, "quantity": 48000, "mandays": 2400, "costEtb": 120000 }] },
+        { "id": "INF-04", "nameEn": "Refilling", "nameAm": "አፈር መመለስ", "unit": "No", "annualQuantity": 48000, "annualMandays": 480, "annualCostEtb": 28800, "normWageEtb": 60, "normMdPerUnit": 0.01, "normsPerMd": 100, "schedule": [{ "month": 8, "quantity": 48000, "mandays": 480, "costEtb": 28800 }] },
+        { "id": "INF-05", "nameEn": "Transport seedlings", "nameAm": "ችግኝ ማጓጓዝ", "unit": "No", "annualQuantity": 48000, "annualMandays": 480, "annualCostEtb": 38400, "normWageEtb": 80, "normMdPerUnit": 0.01, "normsPerMd": 100, "schedule": [{ "month": 9, "quantity": 48000, "mandays": 480, "costEtb": 38400 }] },
+        { "id": "INF-06", "nameEn": "Planting", "nameAm": "ተከላ", "unit": "No", "annualQuantity": 48000, "annualMandays": 480, "annualCostEtb": 38400, "normWageEtb": 80, "normMdPerUnit": 0.01, "normsPerMd": 100, "schedule": [{ "month": 9, "quantity": 48000, "mandays": 480, "costEtb": 38400 }] }
+      ]
+    },
+    {
+      "sectionCode": "harvest",
+      "sectionLabel": "V & VI. Coffee Picking & Processing",
+      "afpLineId": "AFP-2026-005",
+      "afp": {
+        "activity": "Harvest campaign — cherry to hulling",
+        "budgetEtb": 0,
+        "budgetUsd": 0,
+        "kpiTarget": "Yield ≥350 kg/ha green bean",
+        "notes": "Blocks A–E · picking through processing · B-Agro submitted plan"
+      },
+      "scope": { "blocks": ["A", "B", "C", "D", "E"], "productiveTrees": 213906, "grossAreaHa": 128.94 },
+      "activities": [
+        { "id": "HAR-01", "nameEn": "Picking red cherry", "nameAm": "ቀይ ጸጉር መቀነስ", "unit": "kg", "annualQuantity": 45000, "annualMandays": 30000, "annualCostEtb": 1800000, "normWageEtb": 60, "normMdPerUnit": 0.667, "normsPerMd": 1.5 },
+        { "id": "HAR-02", "nameEn": "Cherry transport to drying bed", "nameAm": "ጸጉር ማጓጓዝ", "unit": "kg", "annualQuantity": 45000, "annualMandays": 4500, "annualCostEtb": 270000, "normWageEtb": 60, "normMdPerUnit": 0.1, "normsPerMd": 10 },
+        { "id": "HAR-03", "nameEn": "Drying bed management", "nameAm": "የ drying bed ስራ", "unit": "bed-day", "annualQuantity": 3650, "annualMandays": 730, "annualCostEtb": 43800, "normWageEtb": 60, "normMdPerUnit": 0.2, "normsPerMd": 5 },
+        { "id": "HAR-04", "nameEn": "Drying coffee", "nameAm": "ቡና ማድረቅ", "unit": "kg", "annualQuantity": 45000, "annualMandays": 2250, "annualCostEtb": 135000, "normWageEtb": 60, "normMdPerUnit": 0.05, "normsPerMd": 20 },
+        { "id": "HAR-05", "nameEn": "Manual cleaning", "nameAm": "ቡና ማጽዳት", "unit": "kg", "annualQuantity": 9000, "annualMandays": 9000, "annualCostEtb": 540000, "normWageEtb": 60, "normMdPerUnit": 1, "normsPerMd": 1 },
+        { "id": "HAR-06", "nameEn": "Loading and unloading", "nameAm": "መጫን/መውረድ", "unit": "kg", "annualQuantity": 9000, "annualMandays": 450, "annualCostEtb": 31500, "normWageEtb": 70, "normMdPerUnit": 0.05, "normsPerMd": 20 },
+        { "id": "HAR-07", "nameEn": "Storage and warehousing", "nameAm": "መጋዘን", "unit": "month", "annualQuantity": 12, "annualMandays": 120, "annualCostEtb": 7200, "normWageEtb": 60, "normMdPerUnit": 10, "normsPerMd": 0.1 }
+      ]
+    }
+  ]
+}

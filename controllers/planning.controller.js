@@ -1,6 +1,7 @@
 const catchAsync = require("../utils/catchAsync");
 const afpService = require("../services/afp.service");
 const afeService = require("../services/afe.service");
+const workPlanPromote = require("../services/workPlanPromote.service");
 
 exports.findAllAfp = catchAsync(async (req, res) => {
   const { items, meta } = await afpService.findAll(req.query, req.user);
@@ -28,6 +29,10 @@ exports.approveAfp = catchAsync(async (req, res) => {
 });
 exports.closeAfp = catchAsync(async (req, res) => {
   const data = await afpService.close(req.params.afpLineId, req.user);
+  res.json({ data });
+});
+exports.afpSchedule = catchAsync(async (req, res) => {
+  const data = await workPlanPromote.getAfpLineSchedule(req.params.afpLineId, req.user);
   res.json({ data });
 });
 

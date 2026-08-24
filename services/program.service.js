@@ -110,8 +110,8 @@ exports.createProgram = async (user, dto) => {
 
 exports.inviteOrganization = async (user, programId, dto) => {
   await assertProgramMember(user, programId);
-  if (!["silva_owner", "silva_country_manager", "spx_principal", "system_admin"].includes(user.role)) {
-    throw new AppError(403, "FORBIDDEN", "Insufficient permissions to invite organizations.");
+  if (!["spx_principal", "spx_account_handler", "system_admin"].includes(user.role)) {
+    throw new AppError(403, "FORBIDDEN", "Only SPX can invite organizations to a program.");
   }
   let toOrg = null;
   if (dto.organizationId) {

@@ -9,7 +9,7 @@ const schemas = require("../schemas");
 const router = express.Router();
 
 router.post("/login", rateLimit, validate(schemas.login), authController.login);
-router.post("/signup", rateLimit, validate(schemas.signup), authController.signup);
+router.post("/signup", rateLimit, authController.signup);
 router.post("/logout", authenticateJWT, authController.logout);
 router.post("/refresh", rateLimit, validate(schemas.refresh), authController.refresh);
 router.get("/me", authenticateJWT, authController.me);

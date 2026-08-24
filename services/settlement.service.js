@@ -6,6 +6,7 @@ const { settlementJson } = require("../utils/serializers");
 const { isVendorRole } = require("../utils/roles");
 const { assertMakerChecker } = require("./utils/makerChecker");
 const { scopedWhere, programCreateData, requireProgramId } = require("./utils/programScope");
+const notify = require("./workflowNotifications.service");
 
 exports.findAll = async (query, user) => {
   const { page, pageSize, skip, take, statuses } = parseListQuery(query);
@@ -48,6 +49,7 @@ exports.create = async (dto, user) => {
       amountEtb: decimal(dto.amountEtb),
     }),
   });
+  await notify.settlementCreated(row);
   return settlementJson(row);
 };
 
@@ -83,17 +85,17 @@ exports.authorize = async (id, user) => {
     prisma,
     actionLabel: "authorize",
   });
-  return settlementJson(
-    await prisma.owner_settlements.update({
-      where: { id },
-      data: {
-        status: "authorized",
-        spxAuthorized: true,
-        authorizedByUserId: user.id,
-        dateAuthorized: new Date(),
-      },
-    })
-  );
+  const updated = await prisma.owner_settlements.update({
+    where: { id },
+    data: {
+      status: "authorized",
+      spxAuthorized: true,
+      authorizedByUserId: user.id,
+      dateAuthorized: new Date(),
+    },
+  });
+  await notify.settlementAuthorized(updated);
+  return settlementJson(updated);
 };
 
 exports.markSettled = async (id, user) => {
@@ -106,5 +108,8 @@ exports.markSettled = async (id, user) => {
     where: { id: row.paymentRequestId },
     data: { status: "settled", settlementId: row.id },
   });
+  await notify.settlementSettled(updated);
+  const settledPr = await prisma.payment_requests.findUnique({ where: { id: row.paymentRequestId } });
+  if (settledPr) await notify.paymentRequestSettled(settledPr);
   return settlementJson(updated);
 };

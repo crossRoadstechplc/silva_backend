@@ -13,6 +13,7 @@ const FT_CREATE = ["vendor_field_lead", "vendor_worker", "vendor_supervisor", "v
 const workOrderRoutes = express.Router();
 workOrderRoutes.use(authenticateJWT);
 workOrderRoutes.get("/", exec.findAllWo);
+workOrderRoutes.get("/blocks/list", exec.listBlocks);
 workOrderRoutes.post("/", requireRole(SPX), validate(schemas.woCreate), auditLog("work_order"), exec.createWo);
 workOrderRoutes.get("/:workOrderId", exec.findOneWo);
 workOrderRoutes.patch("/:workOrderId", requireRole(SPX), auditLog("work_order"), exec.updateWo);
@@ -23,6 +24,8 @@ workOrderRoutes.post("/:workOrderId/close", requireRole(SPX), auditLog("work_ord
 workOrderRoutes.get("/:workOrderId/assignments", exec.listAssignments);
 workOrderRoutes.post("/:workOrderId/assignments", requireRole(SPX), validate(schemas.assignmentCreate), exec.addAssignment);
 workOrderRoutes.patch("/:workOrderId/assignments/:assignmentId", requireRole(SPX), exec.patchAssignment);
+workOrderRoutes.get("/:workOrderId/blocks", exec.listBlockAssignments);
+workOrderRoutes.post("/:workOrderId/blocks", requireRole(SPX), exec.addBlockAssignment);
 workOrderRoutes.get("/:workOrderId/tasks", exec.listTasks);
 workOrderRoutes.post("/:workOrderId/tasks", requireRole(VENDOR_LEAD), validate(schemas.taskCreate), exec.createTask);
 
@@ -65,6 +68,6 @@ settlementRoutes.post("/", requireRole(SPX), validate(schemas.stlCreate), auditL
 settlementRoutes.get("/:settlementId", exec.findOneStl);
 settlementRoutes.patch("/:settlementId", requireRole(SPX), auditLog("owner_settlement"), exec.updateStl);
 settlementRoutes.post("/:settlementId/authorize", requireRole(SPX), auditLog("owner_settlement"), exec.authorizeStl);
-settlementRoutes.post("/:settlementId/mark-settled", requireRole([...SPX, "silva_finance"]), auditLog("owner_settlement"), exec.markSettled);
+settlementRoutes.post("/:settlementId/mark-settled", requireRole([...SPX, "silva_owner", "silva_finance"]), auditLog("owner_settlement"), exec.markSettled);
 
 module.exports = { workOrderRoutes, taskRoutes, fieldTicketRoutes, paymentRequestRoutes, settlementRoutes };

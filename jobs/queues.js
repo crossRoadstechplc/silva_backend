@@ -1,25 +1,54 @@
 const prisma = require("../config/database");
 const { uuid } = require("../utils/ids");
+const { expandRecipientRoles } = require("../utils/notificationRoles");
 
-async function createNotification({ triggerType, entityType, entityId, recipientRole, message, recipientUserId, programId }) {
+async function defaultProgramId() {
+  const program = await prisma.programs.findFirst({
+    where: { status: "active" },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  return program?.id ?? null;
+}
+
+async function createNotification({
+  triggerType,
+  entityType,
+  entityId,
+  recipientRole,
+  message,
+  recipientUserId,
+  programId,
+}) {
+  const resolvedProgramId = programId ?? (await defaultProgramId());
   let userIds = [];
+
   if (recipientUserId) {
     userIds = [recipientUserId];
   } else {
+    const targetRoles = expandRecipientRoles(recipientRole);
     const users = await prisma.users.findMany({
       where: {
-        role: recipientRole,
+        role: { in: targetRoles },
         active: true,
-        ...(programId ? { activeProgramId: programId } : {}),
+        ...(resolvedProgramId ? { activeProgramId: resolvedProgramId } : {}),
       },
       select: { id: true },
     });
-    userIds = users.map((u) => u.id);
+    userIds = [...new Set(users.map((u) => u.id))];
   }
 
   if (userIds.length === 0) {
     await prisma.notifications.create({
-      data: { id: uuid("ntf"), triggerType, entityType, entityId, recipientRole, message, programId: programId || null },
+      data: {
+        id: uuid("ntf"),
+        triggerType,
+        entityType,
+        entityId,
+        recipientRole,
+        message,
+        programId: resolvedProgramId,
+      },
     });
     return;
   }
@@ -33,9 +62,9 @@ async function createNotification({ triggerType, entityType, entityId, recipient
       recipientRole,
       recipientUserId: id,
       message,
-      programId: programId || null,
+      programId: resolvedProgramId,
     })),
   });
 }
 
-module.exports = { createNotification };
+module.exports = { createNotification, defaultProgramId };

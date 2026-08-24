@@ -5,7 +5,7 @@ const { nextTextId } = require("../utils/ids");
 const { decimal, parseListQuery, meta } = require("../utils/helpers");
 const { afeJson, auditJson } = require("../utils/serializers");
 const { isVendorRole, isSpxRole } = require("../utils/roles");
-const { createNotification } = require("../jobs/queues");
+const notify = require("./workflowNotifications.service");
 const { scopedWhere, programCreateData, requireProgramId } = require("./utils/programScope");
 
 async function getThresholds(programId) {
@@ -99,6 +99,7 @@ exports.submit = async (id, user) => {
   if (afe.status === "submitted") return afeJson(afe);
   if (afe.status !== "draft") throw new AppError(400, "INVALID_STATE", "Workflow transition not allowed.");
   const updated = await prisma.afes.update({ where: { id }, data: { status: "submitted" } });
+  await notify.afeSubmitted(updated);
   return afeJson(updated);
 };
 
@@ -121,23 +122,15 @@ exports.validate = async (id, user) => {
     data: { status: nextStatus, spxValidated: true, silvaApproved: false, approvalDate },
   });
   if (afe.band === "B") {
-    await createNotification({
-      programId: afe.programId,
-      triggerType: "afe_pending",
-      entityType: "afe",
-      entityId: id,
-      recipientRole: "silva_owner",
-      message: `${id} Band B issued by SPX — Silva may object within 5 business days (silence is deemed approval).`,
-    });
+    await notify.afePendingSilva(
+      afe,
+      `${id} Band B issued by SPX — Silva may object within 5 business days (silence is deemed approval).`,
+    );
   } else if (afe.silvaApprovalRequired) {
-    await createNotification({
-      programId: afe.programId,
-      triggerType: "afe_pending",
-      entityType: "afe",
-      entityId: id,
-      recipientRole: "silva_owner",
-      message: `${id} (${afe.band}) requires Silva written approval before the AFE issues.`,
-    });
+    await notify.afePendingSilva(
+      afe,
+      `${id} (${afe.band}) requires Silva written approval before the AFE issues.`,
+    );
   }
   return afeJson(updated);
 };
@@ -164,6 +157,7 @@ exports.approve = async (id, user) => {
       where: { id },
       data: { status: "approved", silvaApproved: true, approvalDate: new Date() },
     });
+    await notify.afeApproved(approved);
     return afeJson(approved);
   }
 
@@ -175,6 +169,7 @@ exports.approve = async (id, user) => {
     where: { id },
     data: { status: "approved", approvalDate: new Date() },
   });
+  await notify.afeApproved(approved);
   return afeJson(approved);
 };
 
@@ -195,6 +190,7 @@ exports.reject = async (id, reason, user) => {
     throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
   }
   const updated = await prisma.afes.update({ where: { id }, data: { status: "rejected" } });
+  await notify.afeRejected(updated);
   return afeJson(updated);
 };
 

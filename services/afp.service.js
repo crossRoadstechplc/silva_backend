@@ -4,6 +4,7 @@ const { nextAfpId } = require("../utils/ids");
 const { decimal, parseListQuery, meta } = require("../utils/helpers");
 const { afpJson } = require("../utils/serializers");
 const { scopedWhere, programCreateData, requireProgramId } = require("./utils/programScope");
+const notify = require("./workflowNotifications.service");
 
 function assertDraft(status) {
   if (status !== "draft") throw new AppError(400, "INVALID_STATE", "Only draft records can be edited.");
@@ -68,7 +69,9 @@ exports.submit = async (id, user) => {
   const row = await getScoped(id, user);
   if (row.status === "submitted") return afpJson(row, user);
   if (row.status !== "draft") throw new AppError(400, "INVALID_STATE", "Workflow transition not allowed.");
-  return afpJson(await prisma.afp_lines.update({ where: { id }, data: { status: "submitted" } }), user);
+  const updated = await prisma.afp_lines.update({ where: { id }, data: { status: "submitted" } });
+  await notify.afpSubmitted(updated);
+  return afpJson(updated, user);
 };
 
 exports.approve = async (id, user) => {
@@ -78,13 +81,12 @@ exports.approve = async (id, user) => {
   if (row.createdByUserId === user.id) {
     throw new AppError(409, "MAKER_CHECKER_VIOLATION", "Actor cannot approve own submission.");
   }
-  return afpJson(
-    await prisma.afp_lines.update({
-      where: { id },
-      data: { status: "approved", silvaApproved: true, approvalDate: new Date() },
-    }),
-    user,
-  );
+  const updated = await prisma.afp_lines.update({
+    where: { id },
+    data: { status: "approved", silvaApproved: true, approvalDate: new Date() },
+  });
+  await notify.afpApproved(updated);
+  return afpJson(updated, user);
 };
 
 exports.close = async (id, user) => {

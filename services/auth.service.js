@@ -67,7 +67,14 @@ exports.login = async (email, password) => {
     where: { email: email.toLowerCase() },
     include: { organization: true },
   });
-  if (!user || !user.active) throw new AppError(401, "UNAUTHENTICATED", "Invalid email or password.");
+  if (!user) throw new AppError(401, "UNAUTHENTICATED", "Invalid email or password.");
+  if (!user.active) {
+    throw new AppError(
+      403,
+      "ACCOUNT_INACTIVE",
+      "Your account is not activated yet. Use the activation link from SPX or contact platform support.",
+    );
+  }
   if (user.organization?.status === "suspended") {
     throw new AppError(403, "FORBIDDEN", "Organization is suspended.");
   }
@@ -76,62 +83,12 @@ exports.login = async (email, password) => {
   return tokenBundle(user);
 };
 
-exports.signup = async (dto) => {
-  const email = String(dto.email).toLowerCase();
-  const existing = await prisma.users.findUnique({ where: { email } });
-  if (existing) throw new AppError(409, "CONFLICT", "Email already registered.");
-  const slug = programService.slugify(dto.orgSlug || dto.orgName);
-  if (!slug) throw new AppError(400, "VALIDATION_ERROR", "Organization name is required.");
-  const slugTaken = await prisma.organizations.findUnique({ where: { slug } });
-  if (slugTaken) throw new AppError(409, "CONFLICT", "Organization slug already taken.");
-
-  const orgType = dto.orgType;
-  if (!["silva", "spx", "vendor"].includes(orgType)) {
-    throw new AppError(400, "VALIDATION_ERROR", "orgType must be silva, spx, or vendor.");
-  }
-  const role = adminRoleForOrgType(orgType);
-  const orgId = uuid("org");
-  const userId = uuid("usr");
-  const passwordHash = await bcrypt.hash(dto.password, env.BCRYPT_ROUNDS);
-
-  const org = await prisma.organizations.create({
-    data: {
-      id: orgId,
-      name: dto.orgName,
-      slug,
-      displayName: dto.displayName || dto.orgName,
-      type: orgType,
-      brandingJson: dto.branding || { tagline: "" },
-      vendor:
-        orgType === "vendor"
-          ? {
-              create: {
-                id: uuid("vnd"),
-                name: dto.orgName,
-                category: dto.vendorCategory || "Field Operations",
-                status: "active",
-              },
-            }
-          : undefined,
-    },
-    include: { vendor: true },
-  });
-
-  const user = await prisma.users.create({
-    data: {
-      id: userId,
-      name: dto.name,
-      email,
-      passwordHash,
-      role,
-      organizationId: org.id,
-      vendorId: org.vendor?.id || null,
-      memberships: { create: { id: uuid("mem"), organizationId: org.id, role } },
-    },
-    include: { organization: true },
-  });
-
-  return tokenBundle(user);
+exports.signup = async () => {
+  throw new AppError(
+    403,
+    "SIGNUP_DISABLED",
+    "Public signup is disabled. Asset owners and vendors must apply for registration; SPX will activate approved accounts.",
+  );
 };
 
 exports.logout = async (userId, refreshToken) => {

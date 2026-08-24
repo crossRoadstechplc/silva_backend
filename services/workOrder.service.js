@@ -5,6 +5,8 @@ const { parseListQuery, meta } = require("../utils/helpers");
 const { workOrderJson, assignmentJson, taskJson } = require("../utils/serializers");
 const { isVendorRole, isSpxRole } = require("../utils/roles");
 const { scopedWhere, programCreateData, requireProgramId } = require("./utils/programScope");
+const farmEstateScope = require("./utils/farmEstateScope");
+const notify = require("./workflowNotifications.service");
 
 async function defaultVendor() {
   return prisma.vendors.findFirst({ where: { isDefaultExecutionPartner: true } });
@@ -27,12 +29,18 @@ async function scopedWhereWo(user, extra = {}) {
 }
 
 exports.findAll = async (query, user) => {
+  const programId = requireProgramId(user);
   const { page, pageSize, skip, take, statuses } = parseListQuery(query);
   const where = await scopedWhereWo(user);
   if (statuses.length) where.status = { in: statuses };
   if (query.afeId) where.afeId = query.afeId;
   if (query.assignedVendorId) where.assignedVendorId = query.assignedVendorId;
   if (query.tier) where.tier = query.tier;
+  const farmEstateId = farmEstateScope.parseFarmEstateId(query);
+  if (farmEstateId) {
+    const estateFilter = await farmEstateScope.workOrderWhereForEstate(farmEstateId, programId);
+    farmEstateScope.mergeEstateFilter(where, estateFilter);
+  }
   const [rows, total] = await Promise.all([
     prisma.work_orders.findMany({
       where,
@@ -72,12 +80,25 @@ exports.create = async (dto, user) => {
     throw new AppError(422, "BUSINESS_RULE_VIOLATION", "Work Order must trace to an approved AFE.");
   }
   const id = await nextTextId("wo", "WO");
+  let activity = dto.activity;
+  let category = dto.category;
+  let activityCatalogId = dto.activityCatalogId ?? null;
+
+  if (activityCatalogId) {
+    const catalog = await prisma.activity_catalog.findFirst({
+      where: { id: activityCatalogId, programId },
+    });
+    if (!catalog) throw new AppError(404, "NOT_FOUND", "Activity catalog entry not found.");
+    activity = activity || `${catalog.nameEn} (${catalog.id})`;
+    category = category || catalog.sectionLabel;
+  }
+
   const wo = await prisma.work_orders.create({
     data: programCreateData(user, {
       id,
       afeId: dto.afeId,
-      category: dto.category,
-      activity: dto.activity,
+      category,
+      activity,
       tier: dto.tier,
       weekStart: dto.weekStart,
       weekEnd: dto.weekEnd,
@@ -85,9 +106,24 @@ exports.create = async (dto, user) => {
       spxOversightHoursL2: dto.spxOversightHoursL2 || 0,
       spxOversightHoursL3: dto.spxOversightHoursL3 || 0,
       assignedVendorId: dto.assignedVendorId ?? null,
+      activityCatalogId,
     }),
     include: { assignedVendor: true },
   });
+
+  if (dto.blockIds?.length) {
+    for (const blockId of dto.blockIds) {
+      await prisma.work_order_block_assignments.create({
+        data: {
+          id: uuid("wob"),
+          workOrderId: wo.id,
+          blockId,
+          roleOnBlock: "scope",
+        },
+      });
+    }
+  }
+
   return workOrderJson(wo, { assignedVendorName: await resolveVendorName(wo) });
 };
 
@@ -155,21 +191,25 @@ exports.issue = async (id, user) => {
   if (wo.afe.afp.status === "approved") {
     await prisma.afp_lines.update({ where: { id: wo.afe.afpLineId }, data: { status: "active" } });
   }
+  await notify.workOrderIssued(updated);
   return workOrderJson(updated, { assignedVendorName: await resolveVendorName(updated) });
 };
 
 exports.start = async (id) => {
   const updated = await transition(id, "issued", "in_progress");
+  await notify.workOrderStarted(updated);
   return workOrderJson(updated, { assignedVendorName: await resolveVendorName(updated) });
 };
 
 exports.complete = async (id) => {
   const updated = await transition(id, "in_progress", "complete");
+  await notify.workOrderCompleted(updated);
   return workOrderJson(updated, { assignedVendorName: await resolveVendorName(updated) });
 };
 
 exports.close = async (id) => {
   const updated = await transition(id, "complete", "closed");
+  await notify.workOrderClosed(updated);
   return workOrderJson(updated, { assignedVendorName: await resolveVendorName(updated) });
 };
 
@@ -286,6 +326,52 @@ exports.cancelTask = async (taskId) => {
     throw new AppError(400, "INVALID_STATE", "Workflow transition not allowed.");
   }
   return taskJson(await prisma.work_order_tasks.update({ where: { id: taskId }, data: { status: "cancelled" } }));
+};
+
+exports.listBlocks = async (user) => {
+  const programId = requireProgramId(user);
+  const rows = await prisma.farm_blocks.findMany({
+    where: { programId },
+    orderBy: { code: "asc" },
+  });
+  return rows.map((b) => ({
+    id: b.id,
+    code: b.code,
+    label: b.label,
+    areaHa: b.areaHa != null ? Number(b.areaHa) : null,
+    treeCount: b.treeCount,
+  }));
+};
+
+exports.listBlockAssignments = async (workOrderId) => {
+  await ensureWo(workOrderId);
+  const rows = await prisma.work_order_block_assignments.findMany({
+    where: { workOrderId },
+    include: { block: true, user: true },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    blockId: r.blockId,
+    blockCode: r.block.code,
+    userId: r.userId,
+    userName: r.user?.name || null,
+    roleOnBlock: r.roleOnBlock,
+  }));
+};
+
+exports.addBlockAssignment = async (workOrderId, dto, user) => {
+  await ensureWo(workOrderId);
+  if (!isSpxRole(user.role)) throw new AppError(403, "FORBIDDEN", "Only SPX can assign blocks.");
+  const row = await prisma.work_order_block_assignments.create({
+    data: {
+      id: uuid("wob"),
+      workOrderId,
+      blockId: dto.blockId,
+      userId: dto.userId || null,
+      roleOnBlock: dto.roleOnBlock || "manager",
+    },
+  });
+  return row;
 };
 
 async function ensureWo(id) {

@@ -20,10 +20,50 @@ const signup = z.object({
   password: z.string().min(8),
   orgName: z.string().min(1),
   orgSlug: z.string().optional(),
-  orgType: z.enum(["silva", "spx", "vendor"]),
+  orgType: z.enum(["silva", "vendor"]),
   displayName: z.string().optional(),
   vendorCategory: z.string().optional(),
   branding: z.record(z.any()).optional(),
+});
+
+const registrationSubmit = z.object({
+  orgType: z.enum(["silva", "vendor"]),
+  orgName: z.string().min(1),
+  orgSlug: z.string().optional(),
+  displayName: z.string().optional(),
+  legalName: z.string().optional(),
+  country: z.string().optional(),
+  region: z.string().optional(),
+  address: z.string().optional(),
+  website: z.string().optional(),
+  contactName: z.string().min(1),
+  contactEmail: z.string().email(),
+  contactPhone: z.string().optional(),
+  contactTitle: z.string().optional(),
+  assetInterests: z.string().optional(),
+  estimatedHectares: z.number().positive().optional(),
+  governanceNotes: z.string().optional(),
+  vendorCategory: z.string().optional(),
+  servicesProvided: z.string().optional(),
+  insuranceOnFile: z.boolean().optional(),
+  fieldCapacity: z.string().optional(),
+  profileJson: z.record(z.any()).optional(),
+});
+
+const registrationActivate = z.object({
+  token: z.string().min(1),
+  password: z.string().min(8),
+  name: z.string().min(1).optional(),
+});
+
+const registrationReviewNotes = z.object({ notes: z.string().optional() });
+const registrationReject = z.object({ notes: z.string().min(1) });
+const contactSubmit = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
+  organization: z.string().optional(),
+  subject: z.string().min(1),
+  message: z.string().min(10).max(5000),
 });
 const programCreate = z.object({
   name: z.string().min(1),
@@ -79,6 +119,78 @@ const afeCreate = z.object({
   description: z.string().min(1),
   estimatedCostUsd: z.number().positive(),
 });
+const coaCreate = z.object({
+  sourceAccount: z.string().min(1),
+  glAccount: z.string().min(1),
+  description: z.string().optional(),
+});
+
+const workPlanCreate = z.object({
+  farmEstateId: z.string().min(1),
+  totalAreaHa: z.number().positive().optional(),
+  budgetYearLabel: z.string().min(1),
+  budgetYearGc: z.number().int().min(2020).max(2100),
+  fxEtbPerUsd: z.number().positive().optional(),
+  parsedJson: z.record(z.any()).optional(),
+  sourceAttachmentId: z.string().optional(),
+});
+
+const workPlanUpdate = z
+  .object({
+    farmEstateId: z.string().min(1).optional(),
+    totalAreaHa: z.number().positive().nullable().optional(),
+    budgetYearLabel: z.string().min(1).optional(),
+    budgetYearGc: z.number().int().min(2020).max(2100).optional(),
+    fxEtbPerUsd: z.number().positive().optional(),
+  })
+  .refine((data) => Object.values(data).some((v) => v !== undefined), {
+    message: "At least one field is required.",
+  });
+
+const farmEstateCreate = z.object({
+  name: z.string().min(1),
+  ownerOrganizationId: z.string().min(1).optional(),
+  totalAreaHa: z.number().positive().optional(),
+  location: z.string().optional(),
+  notes: z.string().optional(),
+  status: z.enum(["active", "inactive"]).optional(),
+  vendorIds: z.array(z.string()).optional(),
+  blocks: z
+    .array(
+      z.object({
+        code: z.string().min(1),
+        label: z.string().optional(),
+        areaHa: z.number().optional(),
+        treeCount: z.number().int().optional(),
+      }),
+    )
+    .optional(),
+});
+
+const farmEstateUpdate = z.object({
+  name: z.string().min(1).optional(),
+  ownerOrganizationId: z.string().min(1).nullable().optional(),
+  totalAreaHa: z.number().positive().nullable().optional(),
+  location: z.string().optional(),
+  notes: z.string().optional(),
+  status: z.enum(["active", "inactive"]).optional(),
+});
+
+const farmEstateVendors = z.object({
+  vendorIds: z.array(z.string()),
+});
+
+const farmBlockCreate = z.object({
+  code: z.string().min(1),
+  label: z.string().optional(),
+  areaHa: z.number().optional(),
+  treeCount: z.number().int().optional(),
+});
+
+const workPlanReview = z.object({
+  notes: z.string().min(1).optional(),
+});
+
 const woCreate = z.object({
   afeId: z.string().min(1),
   category: z.string().min(1),
@@ -90,26 +202,37 @@ const woCreate = z.object({
   spxOversightHoursL2: z.number().int().optional(),
   spxOversightHoursL3: z.number().int().optional(),
   assignedVendorId: z.string().nullable().optional(),
+  activityCatalogId: z.string().nullable().optional(),
+  blockIds: z.array(z.string()).optional(),
 });
+
+const ftCreate = z.object({
+  workOrderId: z.string().min(1),
+  activityCatalogId: z.string().optional(),
+  ticketType: z.enum(["field_execution", "payroll_confirmation"]).optional(),
+  activityRecorded: z.string().min(1),
+  areaHa: z.number().nonnegative(),
+  laborCount: z.number().int().nonnegative(),
+  materialsUsed: z.string().optional(),
+  ticketDate: z.string().min(1),
+  actualQuantity: z.number().nonnegative().optional(),
+  actualMandays: z.number().nonnegative().optional(),
+  actualCostEtb: z.number().nonnegative().optional(),
+});
+
 const assignmentCreate = z.object({
   userId: z.string().min(1),
   roleOnOrder: z.string().min(1),
   isPrimary: z.boolean().optional(),
 });
+
 const taskCreate = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   assigneeUserId: z.string().optional(),
   dueDate: z.string().optional(),
 });
-const ftCreate = z.object({
-  workOrderId: z.string().min(1),
-  activityRecorded: z.string().min(1),
-  areaHa: z.number().nonnegative(),
-  laborCount: z.number().int().nonnegative(),
-  materialsUsed: z.string().optional(),
-  ticketDate: z.string().min(1),
-});
+
 const prCreate = z.object({
   workOrderId: z.string().min(1),
   fieldTicketId: z.string().min(1),
@@ -206,11 +329,6 @@ const seasonWindowCreate = z.object({
   linkedWorkOrderId: z.string().optional(),
   notes: z.string().optional(),
 });
-const coaCreate = z.object({
-  sourceAccount: z.string().min(1),
-  glAccount: z.string().min(1),
-  description: z.string().optional(),
-});
 
 module.exports = {
   commentBody,
@@ -221,6 +339,11 @@ module.exports = {
   reset,
   changePassword,
   signup,
+  registrationSubmit,
+  registrationActivate,
+  registrationReviewNotes,
+  registrationReject,
+  contactSubmit,
   programCreate,
   programInviteOrg,
   switchProgram,
@@ -252,4 +375,11 @@ module.exports = {
   ifsFormCreate,
   seasonCalendarCreate,
   seasonWindowCreate,
+  workPlanCreate,
+  workPlanUpdate,
+  workPlanReview,
+  farmEstateCreate,
+  farmEstateUpdate,
+  farmEstateVendors,
+  farmBlockCreate,
 };

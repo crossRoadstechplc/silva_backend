@@ -38,6 +38,14 @@ const {
   attachmentRoutes,
 } = require("./routes/platform.routes");
 const { ifsFormRoutes, seasonCalendarRoutes, seasonWindowRoutes } = require("./routes/fieldOps.routes");
+const itemRoutes = require("./routes/item.routes");
+const exportRoutes = require("./routes/export.routes");
+const activityCatalogRoutes = require("./routes/activityCatalog.routes");
+const workPlanRoutes = require("./routes/workPlan.routes");
+const farmEstateRoutes = require("./routes/farmEstate.routes");
+const registrationRequestRoutes = require("./routes/registrationRequest.routes");
+const contactRoutes = require("./routes/contact.routes");
+const setProgramRls = require("./middleware/setProgramRls");
 
 const app = express();
 
@@ -67,6 +75,8 @@ app.get("/local-download/:storageKey", (req, res) => {
 });
 
 app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/registration-requests", registrationRequestRoutes);
+app.use("/api/v1/contact", contactRoutes);
 app.use("/api/v1/programs", programRoutes);
 app.use("/api/v1/organizations", orgRouter);
 app.use("/api/v1/invites", inviteRouter);
@@ -75,7 +85,7 @@ app.use("/api/v1/memberships", membershipRouter);
 
 const requireProgramAccess = require("./middleware/requireProgramAccess");
 const authenticateJWT = require("./middleware/authenticateJWT");
-const programScoped = [authenticateJWT, requireProgramAccess];
+const programScoped = [authenticateJWT, requireProgramAccess, setProgramRls];
 app.use("/api/v1/dashboard", ...programScoped, dashboardRoutes);
 app.use("/api/v1/afp-lines", ...programScoped, afpRoutes);
 app.use("/api/v1/afes", ...programScoped, afeRoutes);
@@ -102,6 +112,11 @@ app.use("/api/v1/attachments", attachmentRoutes);
 app.use("/api/v1/ifs-forms", ...programScoped, ifsFormRoutes);
 app.use("/api/v1/season-calendars", ...programScoped, seasonCalendarRoutes);
 app.use("/api/v1/season-windows", ...programScoped, seasonWindowRoutes);
+app.use("/api/v1/activity-catalog", ...programScoped, activityCatalogRoutes);
+app.use("/api/v1/work-plans", ...programScoped, workPlanRoutes);
+app.use("/api/v1/farm-estates", ...programScoped, farmEstateRoutes);
+app.use("/api/v1/items", itemRoutes);
+app.use("/api/v1/exports", ...programScoped, exportRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

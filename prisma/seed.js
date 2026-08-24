@@ -8,6 +8,20 @@ const PROGRAM_ID = "prg_shecha";
 async function main() {
   const hash = await bcrypt.hash(PASSWORD, 10);
 
+  await prisma.gl_journal_export_lines.deleteMany();
+  await prisma.gl_journal_exports.deleteMany();
+  try {
+    await prisma.activity_schedule.deleteMany();
+    await prisma.activity_catalog.deleteMany();
+    await prisma.afp_line_schedules.deleteMany();
+    await prisma.work_order_block_assignments.deleteMany();
+    await prisma.farm_estate_vendors.deleteMany();
+    await prisma.farm_blocks.deleteMany();
+    await prisma.farm_estates.deleteMany();
+    await prisma.work_plan_submissions.deleteMany();
+  } catch {
+    /* tables may not exist before migration */
+  }
   await prisma.audit_log.deleteMany();
   await prisma.notifications.deleteMany();
   await prisma.attachments.deleteMany();
@@ -45,6 +59,12 @@ async function main() {
   await prisma.programs.deleteMany();
   await prisma.organizations.deleteMany();
   await prisma.id_sequences.deleteMany();
+  try {
+    await prisma.contact_submissions.deleteMany();
+    await prisma.registration_requests.deleteMany();
+  } catch {
+    /* table may not exist before migration */
+  }
 
   const silva = await prisma.organizations.create({
     data: {
@@ -120,6 +140,54 @@ async function main() {
       isDefaultExecutionPartner: true,
     },
   });
+
+  const estateBlocks = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
+  await prisma.farm_estates.create({
+    data: {
+      id: "fest_chetu",
+      programId: program.id,
+      ownerOrganizationId: silva.id,
+      name: "Chetu Farm",
+      totalAreaHa: 128.94,
+      location: "Kaffa Zone",
+      notes: "Primary B-Agro execution estate",
+      status: "active",
+      vendorMaps: {
+        create: { id: "fev_bagro_chetu", vendorId: bagro.id, isPrimary: true },
+      },
+      blocks: {
+        create: estateBlocks.map((code) => ({
+          id: `blk_chetu_${code.toLowerCase()}`,
+          programId: program.id,
+          code,
+          label: `Block ${code}`,
+        })),
+      },
+    },
+  });
+  await prisma.farm_estates.create({
+    data: {
+      id: "fest_shecha",
+      programId: program.id,
+      ownerOrganizationId: silva.id,
+      name: "Shecha Estate",
+      totalAreaHa: 210,
+      location: "Shecha",
+      status: "active",
+      vendorMaps: {
+        create: { id: "fev_bagro_shecha", vendorId: bagro.id, isPrimary: false },
+      },
+      blocks: {
+        create: ["A", "B", "C", "D", "E", "F", "G"].map((code) => ({
+          id: `blk_shecha_${code.toLowerCase()}`,
+          programId: program.id,
+          code,
+          label: `Block ${code}`,
+        })),
+      },
+    },
+  });
+
   await prisma.vendors.create({
     data: {
       id: "vnd_highland",
@@ -634,6 +702,51 @@ async function main() {
   await prisma.id_sequences.create({ data: { name: "inv", lastValue: 1 } });
   await prisma.id_sequences.create({ data: { name: "pr", lastValue: 0 } });
   await prisma.id_sequences.create({ data: { name: "stl", lastValue: 0 } });
+
+  await prisma.notifications.createMany({
+    data: [
+      {
+        id: "ntf_demo_silva",
+        programId: program.id,
+        triggerType: "afe_pending",
+        entityType: "afe",
+        entityId: "AFE-0003",
+        recipientRole: "silva_owner",
+        recipientUserId: "usr_silva_owner",
+        message: "Band C AFE AFE-0003 is awaiting Silva approval.",
+      },
+      {
+        id: "ntf_demo_spx",
+        programId: program.id,
+        triggerType: "ft_vendor_reviewed",
+        entityType: "field_ticket",
+        entityId: "FT-0001",
+        recipientRole: "spx_field_supervisor",
+        recipientUserId: "usr_spx_supervisor",
+        message: "Field ticket FT-0001 passed vendor review — SPX validation required.",
+      },
+      {
+        id: "ntf_demo_principal",
+        programId: program.id,
+        triggerType: "workplan_submitted",
+        entityType: "work_plan_submission",
+        entityId: "wps_demo",
+        recipientRole: "spx_principal",
+        recipientUserId: principal.id,
+        message: "Demo notification — workflow events (AFE, tickets, work plans, registrations) appear here.",
+      },
+      {
+        id: "ntf_demo_vendor",
+        programId: program.id,
+        triggerType: "wo_issued",
+        entityType: "work_order",
+        entityId: "WO-0001",
+        recipientRole: "vendor_field_lead",
+        recipientUserId: lead.id,
+        message: "Work order WO-0001 issued — ready for field execution.",
+      },
+    ],
+  });
 
   console.log("Seed complete. Program:", PROGRAM_ID, "Password: Password123!");
 }

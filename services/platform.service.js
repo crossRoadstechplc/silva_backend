@@ -5,10 +5,12 @@ const AppError = require("../utils/AppError");
 const { uuid, nextTextId } = require("../utils/ids");
 const { decimal, money, parseListQuery, meta, isoDate } = require("../utils/helpers");
 const { revenueJson, reportJson, notificationJson, auditJson } = require("../utils/serializers");
+const { inboxRolesFor } = require("../utils/notificationRoles");
 const { isVendorRole, isSilvaRole, isSpxRole } = require("../utils/roles");
 const { signedUploadUrl, signedDownloadUrl } = require("../config/s3");
 const dashboard = require("./dashboard.service");
 const { scopedWhere, programCreateData, requireProgramId } = require("./utils/programScope");
+const notify = require("./workflowNotifications.service");
 
 exports.listRevenue = async (query, user) => {
   if (user.role !== "spx_principal") {
@@ -113,10 +115,18 @@ exports.budgetVsActual = async (query, user) => {
     const utilizationPercent = Number(line.budgetAllocatedUsd)
       ? Math.round((actualUsd / Number(line.budgetAllocatedUsd)) * 100)
       : 0;
+    const schedules = await prisma.afp_line_schedules.findMany({
+      where: { programId, afpLineId: line.id, year: line.year },
+    });
+    const plannedUsd = schedules.reduce((s, r) => s + Number(r.plannedCostUsd || r.plannedCostEtb) / fx, 0);
+    const plannedEtb = schedules.reduce((s, r) => s + Number(r.plannedCostEtb), 0);
     items.push({
       afpLineId: line.id,
       activity: line.activity,
       budgetAllocatedUsd: money(line.budgetAllocatedUsd),
+      budgetAllocatedEtb: line.budgetAllocatedEtb != null ? money(line.budgetAllocatedEtb) : null,
+      plannedUsd: money(plannedUsd || Number(line.budgetAllocatedEtb || 0) / fx),
+      plannedEtb: money(plannedEtb || Number(line.budgetAllocatedEtb || 0)),
       committedUsd: money(committedUsd),
       actualUsd: money(actualUsd),
       utilizationPercent,
@@ -190,6 +200,7 @@ exports.generateReport = async (type, dto, user) => {
       sections: { budget_vs_actual: items },
     }),
   });
+  await notify.reportGenerated(row);
   return reportJson(row);
 };
 
@@ -232,6 +243,7 @@ exports.releaseReport = async (id, user) => {
     where: { id },
     data: { status: "released", visibleToSilva: true, releasedAt: new Date(), releasedByUserId: user.id },
   });
+  await notify.reportReleased(updated);
   return reportJson(updated);
 };
 
@@ -326,17 +338,20 @@ exports.findGlExport = async (id, user, restricted) => {
         include: { lines: true },
       });
   if (!row) throw new AppError(404, "NOT_FOUND", "Export not found.");
+
+  const lineRows = row.lines.map((l) => ({
+    date: isoDate(l.date),
+    account: l.account,
+    debitEtb: money(l.debitEtb),
+    creditEtb: money(l.creditEtb),
+    memo: l.memo,
+  }));
+
   if (isRestricted) {
     return {
       id: row.id,
       period: row.period,
-      rows: row.lines.map((l) => ({
-        date: isoDate(l.date),
-        account: l.account,
-        debitEtb: money(l.debitEtb),
-        creditEtb: money(l.creditEtb),
-        memo: l.memo,
-      })),
+      rows: lineRows,
     };
   }
   if (isSilvaRole(user.role) || isVendorRole(user.role)) {
@@ -349,6 +364,7 @@ exports.findGlExport = async (id, user, restricted) => {
     status: row.status,
     createdAt: row.createdAt.toISOString(),
     restrictedAccessTokenIssued: row.restrictedAccessTokenIssued,
+    rows: lineRows,
   };
 };
 
@@ -416,7 +432,9 @@ exports.listSchedule3 = async (user) => {
 };
 
 exports.patchSchedule3 = async (band, dto, user) => {
-  if (user.role !== "spx_principal") throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
+  if (!["spx_principal", "system_admin"].includes(user.role)) {
+    throw new AppError(403, "FORBIDDEN", "Only SPX can configure Schedule 3 spend bands.");
+  }
   const programId = requireProgramId(user);
   const existing = await prisma.schedule3_thresholds.findUnique({
     where: { programId_band: { programId, band } },
@@ -543,9 +561,13 @@ exports.patchDisclosure = async (id, dto, user) => {
 exports.listNotifications = async (user, query) => {
   const { page, pageSize, skip, take } = parseListQuery(query);
   const programId = requireProgramId(user);
+  const inboxRoles = inboxRolesFor(user.role);
   const where = {
     programId,
-    OR: [{ recipientUserId: user.id }, { recipientRole: user.role, recipientUserId: null }],
+    OR: [
+      { recipientUserId: user.id },
+      { recipientRole: { in: inboxRoles }, recipientUserId: null },
+    ],
   };
   if (query.acknowledged === "true") where.acknowledged = true;
   if (query.acknowledged === "false") where.acknowledged = false;
@@ -558,11 +580,15 @@ exports.listNotifications = async (user, query) => {
 };
 
 exports.acknowledgeNotification = async (id, user) => {
+  const inboxRoles = inboxRolesFor(user.role);
   const row = await prisma.notifications.findFirst({
     where: {
       id,
       programId: requireProgramId(user),
-      OR: [{ recipientUserId: user.id }, { recipientRole: user.role, recipientUserId: null }],
+      OR: [
+        { recipientUserId: user.id },
+        { recipientRole: { in: inboxRoles }, recipientUserId: null },
+      ],
     },
   });
   if (!row) throw new AppError(404, "NOT_FOUND", "Notification not found.");

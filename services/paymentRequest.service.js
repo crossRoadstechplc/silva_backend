@@ -6,6 +6,7 @@ const { paymentRequestJson, auditJson } = require("../utils/serializers");
 const { isVendorRole, isSilvaRole } = require("../utils/roles");
 const { assertMakerChecker } = require("./utils/makerChecker");
 const { scopedWhere, programCreateData, requireProgramId } = require("./utils/programScope");
+const notify = require("./workflowNotifications.service");
 
 exports.findAll = async (query, user) => {
   if (isSilvaRole(user.role)) {
@@ -88,12 +89,12 @@ exports.submit = async (id, user) => {
   if (!row) throw new AppError(404, "NOT_FOUND", "Payment request not found.");
   if (row.status === "submitted") return paymentRequestJson(row);
   if (row.status !== "draft") throw new AppError(400, "INVALID_STATE", "Workflow transition not allowed.");
-  return paymentRequestJson(
-    await prisma.payment_requests.update({
-      where: { id },
-      data: { status: "submitted", dateSubmitted: new Date() },
-    }),
-  );
+  const updated = await prisma.payment_requests.update({
+    where: { id },
+    data: { status: "submitted", dateSubmitted: new Date() },
+  });
+  await notify.paymentRequestSubmitted(updated);
+  return paymentRequestJson(updated);
 };
 
 exports.verify = async (id, user) => {
@@ -110,17 +111,17 @@ exports.verify = async (id, user) => {
     prisma,
     actionLabel: "verify",
   });
-  return paymentRequestJson(
-    await prisma.payment_requests.update({
-      where: { id },
-      data: {
-        status: "verified",
-        spxVerified: true,
-        spxVerifiedByUserId: user.id,
-        verifiedDate: new Date(),
-      },
-    }),
-  );
+  const updated = await prisma.payment_requests.update({
+    where: { id },
+    data: {
+      status: "verified",
+      spxVerified: true,
+      spxVerifiedByUserId: user.id,
+      verifiedDate: new Date(),
+    },
+  });
+  await notify.paymentRequestVerified(updated);
+  return paymentRequestJson(updated);
 };
 
 exports.reject = async (id, reason, user) => {
@@ -128,7 +129,9 @@ exports.reject = async (id, reason, user) => {
   if (!row) throw new AppError(404, "NOT_FOUND", "Payment request not found.");
   if (row.status === "rejected") return paymentRequestJson(row);
   if (row.status !== "submitted") throw new AppError(400, "INVALID_STATE", "Workflow transition not allowed.");
-  return paymentRequestJson(await prisma.payment_requests.update({ where: { id }, data: { status: "rejected" } }));
+  const updated = await prisma.payment_requests.update({ where: { id }, data: { status: "rejected" } });
+  await notify.paymentRequestRejected(updated);
+  return paymentRequestJson(updated);
 };
 
 exports.settle = async (id, settlementId, user) => {
@@ -136,12 +139,12 @@ exports.settle = async (id, settlementId, user) => {
   if (!row) throw new AppError(404, "NOT_FOUND", "Payment request not found.");
   if (row.status === "settled") return paymentRequestJson(row);
   if (row.status !== "verified") throw new AppError(400, "INVALID_STATE", "Workflow transition not allowed.");
-  return paymentRequestJson(
-    await prisma.payment_requests.update({
-      where: { id },
-      data: { status: "settled", settlementId: settlementId || row.settlementId },
-    }),
-  );
+  const updated = await prisma.payment_requests.update({
+    where: { id },
+    data: { status: "settled", settlementId: settlementId || row.settlementId },
+  });
+  await notify.paymentRequestSettled(updated);
+  return paymentRequestJson(updated);
 };
 
 exports.getHistory = async (id) => {
