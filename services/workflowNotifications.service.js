@@ -254,14 +254,17 @@ exports.afeSubmitted = async (afe) => {
 };
 
 exports.afePendingSilva = async (afe, message) => {
-  await safeNotify({
-    programId: afe.programId,
-    triggerType: "afe_pending",
-    entityType: "afe",
-    entityId: afe.id,
-    recipientRole: "silva_owner",
-    message,
-  });
+  const triggerType = afe.band === "B" ? "bandb_objection_window_opened" : "afe_pending";
+  for (const role of ["silva_owner", "silva_country_manager"]) {
+    await safeNotify({
+      programId: afe.programId,
+      triggerType,
+      entityType: "afe",
+      entityId: afe.id,
+      recipientRole: role,
+      message,
+    });
+  }
 };
 
 exports.afeApproved = async (afe) => {

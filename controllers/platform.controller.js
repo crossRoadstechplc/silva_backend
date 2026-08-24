@@ -161,6 +161,10 @@ exports.ackNotification = catchAsync(async (req, res) => {
   const data = await platformService.acknowledgeNotification(req.params.notificationId, req.user);
   res.json({ data });
 });
+exports.ackAllNotifications = catchAsync(async (req, res) => {
+  const data = await platformService.acknowledgeAllNotifications(req.user);
+  res.json({ data });
+});
 exports.listAudit = catchAsync(async (req, res) => {
   const { items, meta } = await platformService.listAudit(req.query, req.user);
   res.json({ data: items, meta });

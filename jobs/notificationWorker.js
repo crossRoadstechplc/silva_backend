@@ -7,33 +7,62 @@ function utilizationHealth(percent) {
   return "on_track";
 }
 
+function daysBetween(a, b) {
+  return Math.floor((b.getTime() - a.getTime()) / 86400000);
+}
+
+async function notifySilvaRoles(payload) {
+  for (const role of ["silva_owner", "silva_country_manager"]) {
+    await createNotification({ ...payload, recipientRole: role });
+  }
+}
+
 async function runForProgram(programId) {
+  const now = new Date();
   const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 3600 * 1000);
+
   const pending = await prisma.afes.findMany({
     where: { programId, silvaApprovalRequired: true, status: "validated", updatedAt: { lte: fiveDaysAgo } },
   });
   for (const afe of pending) {
-    await createNotification({
+    const overdueDays = daysBetween(new Date(afe.updatedAt), now);
+    await notifySilvaRoles({
       programId,
       triggerType: "afe_pending",
       entityType: "afe",
       entityId: afe.id,
-      recipientRole: "silva_owner",
-      message: `${afe.id} has been pending Silva approval for more than 5 days.`,
+      message: `${afe.id} (Band ${afe.band}) has been pending Silva approval for ${overdueDays} days.`,
     });
   }
 
-  const bandB = await prisma.afes.findMany({
-    where: { programId, band: "B", status: { in: ["approved", "active"] }, approvalDate: { gte: fiveDaysAgo } },
-  });
-  for (const afe of bandB) {
-    await createNotification({
+  // Band B objection window: opened within last 5 days
+  const bandBOpen = await prisma.afes.findMany({
+    where: {
       programId,
-      triggerType: "afe_pending",
+      band: "B",
+      status: { in: ["approved", "active"] },
+      approvalDate: { gte: fiveDaysAgo },
+    },
+  });
+  for (const afe of bandBOpen) {
+    const daysOpen = daysBetween(new Date(afe.approvalDate), now);
+    const daysLeft = Math.max(0, 5 - daysOpen);
+    let triggerType = "bandb_objection_window_opened";
+    let message = `${afe.id} (Band B) issued by SPX — Silva may object within 5 business days (silence is deemed approval).`;
+    if (daysLeft <= 2 && daysLeft > 0) {
+      triggerType = "bandb_objection_due_soon";
+      message = `${afe.id} (Band B) objection window closes in ~${daysLeft} day(s).`;
+    } else if (daysLeft === 0) {
+      triggerType = "bandb_objection_window_elapsed";
+      message = `${afe.id} (Band B) objection window has elapsed — silence is deemed approval.`;
+    }
+    await notifySilvaRoles({
+      programId,
+      triggerType,
       entityType: "afe",
       entityId: afe.id,
-      recipientRole: "silva_owner",
-      message: `${afe.id} (Band B) was issued by SPX — Silva may object within 5 business days.`,
+      message,
+      dedupeHours: daysLeft <= 2 ? 12 : 24,
     });
   }
 
@@ -67,16 +96,29 @@ async function runForProgram(programId) {
 
 async function runNotificationSweep() {
   const soon = new Date(Date.now() + 14 * 24 * 3600 * 1000);
+  const week = new Date(Date.now() + 7 * 24 * 3600 * 1000);
   const expiring = await prisma.vendors.findMany({
     where: { insuranceExpiry: { lte: soon, gte: new Date() } },
   });
   for (const vendor of expiring) {
+    const daysLeft = daysBetween(new Date(), new Date(vendor.insuranceExpiry));
+    const urgency =
+      daysLeft <= 1 ? "tomorrow" : daysLeft <= 7 ? `in ${daysLeft} days` : `on ${vendor.insuranceExpiry.toISOString().slice(0, 10)}`;
     await createNotification({
       triggerType: "insurance_expiring",
       entityType: "vendor",
       entityId: vendor.id,
       recipientRole: "spx_account_handler",
-      message: `Insurance for ${vendor.name} expires on ${vendor.insuranceExpiry.toISOString().slice(0, 10)}.`,
+      message: `Insurance for ${vendor.name} expires ${urgency}.`,
+      dedupeHours: vendor.insuranceExpiry <= week ? 12 : 24,
+    });
+    await createNotification({
+      triggerType: "insurance_expiring",
+      entityType: "vendor",
+      entityId: vendor.id,
+      recipientRole: "spx_principal",
+      message: `Insurance for ${vendor.name} expires ${urgency}.`,
+      dedupeHours: vendor.insuranceExpiry <= week ? 12 : 24,
     });
   }
 

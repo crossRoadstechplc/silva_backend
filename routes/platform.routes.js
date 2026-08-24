@@ -73,6 +73,7 @@ reportRoutes.post("/:reportId/release", requireRole(["spx_principal", "spx_accou
 const notificationRoutes = express.Router();
 notificationRoutes.use(authenticateJWT);
 notificationRoutes.get("/", platform.listNotifications);
+notificationRoutes.post("/acknowledge-all", platform.ackAllNotifications);
 notificationRoutes.post("/:notificationId/acknowledge", platform.ackNotification);
 
 const auditRoutes = express.Router();

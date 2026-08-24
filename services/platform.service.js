@@ -596,6 +596,23 @@ exports.acknowledgeNotification = async (id, user) => {
   return notificationJson(updated);
 };
 
+exports.acknowledgeAllNotifications = async (user) => {
+  const programId = requireProgramId(user);
+  const inboxRoles = inboxRolesFor(user.role);
+  const result = await prisma.notifications.updateMany({
+    where: {
+      programId,
+      acknowledged: false,
+      OR: [
+        { recipientUserId: user.id },
+        { recipientRole: { in: inboxRoles }, recipientUserId: null },
+      ],
+    },
+    data: { acknowledged: true },
+  });
+  return { acknowledgedCount: result.count };
+};
+
 exports.listAudit = async (query, user) => {
   if (!["spx_principal", "system_admin", "silva_owner"].includes(user.role)) {
     throw new AppError(403, "FORBIDDEN", "Insufficient permissions");

@@ -11,6 +11,33 @@ async function defaultProgramId() {
   return program?.id ?? null;
 }
 
+/** Skip if the same unread alert was already sent within `dedupeHours` (default 24). */
+async function alreadyNotified({
+  triggerType,
+  entityType,
+  entityId,
+  recipientRole,
+  recipientUserId,
+  programId,
+  dedupeHours = 24,
+}) {
+  const since = new Date(Date.now() - dedupeHours * 3600 * 1000);
+  const existing = await prisma.notifications.findFirst({
+    where: {
+      triggerType,
+      entityType,
+      entityId,
+      recipientRole,
+      programId: programId || null,
+      acknowledged: false,
+      sentAt: { gte: since },
+      ...(recipientUserId ? { recipientUserId } : {}),
+    },
+    select: { id: true },
+  });
+  return Boolean(existing);
+}
+
 async function createNotification({
   triggerType,
   entityType,
@@ -19,6 +46,7 @@ async function createNotification({
   message,
   recipientUserId,
   programId,
+  dedupeHours = 24,
 }) {
   const resolvedProgramId = programId ?? (await defaultProgramId());
   let userIds = [];
@@ -39,6 +67,18 @@ async function createNotification({
   }
 
   if (userIds.length === 0) {
+    if (
+      await alreadyNotified({
+        triggerType,
+        entityType,
+        entityId,
+        recipientRole,
+        programId: resolvedProgramId,
+        dedupeHours,
+      })
+    ) {
+      return;
+    }
     await prisma.notifications.create({
       data: {
         id: uuid("ntf"),
@@ -53,8 +93,22 @@ async function createNotification({
     return;
   }
 
-  await prisma.notifications.createMany({
-    data: userIds.map((id) => ({
+  const rows = [];
+  for (const id of userIds) {
+    if (
+      await alreadyNotified({
+        triggerType,
+        entityType,
+        entityId,
+        recipientRole,
+        recipientUserId: id,
+        programId: resolvedProgramId,
+        dedupeHours,
+      })
+    ) {
+      continue;
+    }
+    rows.push({
       id: uuid("ntf"),
       triggerType,
       entityType,
@@ -63,8 +117,9 @@ async function createNotification({
       recipientUserId: id,
       message,
       programId: resolvedProgramId,
-    })),
-  });
+    });
+  }
+  if (rows.length) await prisma.notifications.createMany({ data: rows });
 }
 
 module.exports = { createNotification, defaultProgramId };
