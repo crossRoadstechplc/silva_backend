@@ -80,7 +80,9 @@ exports.login = async (email, password) => {
   }
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) throw new AppError(401, "UNAUTHENTICATED", "Invalid email or password.");
-  return tokenBundle(user);
+  const tokens = await tokenBundle(user);
+  const me = await exports.me({ id: user.id });
+  return { ...tokens, me };
 };
 
 exports.signup = async () => {

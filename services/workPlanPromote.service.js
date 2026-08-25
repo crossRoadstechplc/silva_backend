@@ -27,6 +27,7 @@ exports.promoteSubmission = async (submission, { createdByUserId, year }) => {
   }
 
   const programId = submission.programId;
+  const farmEstateId = submission.farmEstateId || null;
   const fx = Number(submission.fxEtbPerUsd) || 130;
 
   const afpLineScheduleRows = [];
@@ -145,12 +146,31 @@ exports.promoteSubmission = async (submission, { createdByUserId, year }) => {
     await createManyInChunks(tx.activity_catalog, catalogRows);
     await createManyInChunks(tx.activity_schedule, scheduleRows);
 
-    for (const code of blockCodes) {
-      await tx.farm_blocks.upsert({
-        where: { programId_code: { programId, code } },
-        create: { id: `blk_${code.toLowerCase()}`, programId, code, label: `Block ${code}` },
-        update: {},
-      });
+    if (blockCodes.size) {
+      if (!farmEstateId) {
+        throw new AppError(
+          400,
+          "INVALID_PLAN",
+          "Work plan must be linked to a farm estate before block codes can be promoted.",
+        );
+      }
+      for (const raw of blockCodes) {
+        const code = String(raw).trim().toUpperCase();
+        if (!code) continue;
+        await tx.farm_blocks.upsert({
+          where: {
+            programId_farmEstateId_code: { programId, farmEstateId, code },
+          },
+          create: {
+            id: `blk_${farmEstateId}_${code.toLowerCase()}`,
+            programId,
+            farmEstateId,
+            code,
+            label: `Block ${code}`,
+          },
+          update: {},
+        });
+      }
     }
 
     return { afpCount: afpLineIds.size, blockCount: blockCodes.size };
