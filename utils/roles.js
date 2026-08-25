@@ -13,6 +13,7 @@ const VENDOR_ROLES = [
 const ROLE_PERMISSIONS = {
   silva_owner: [
     "afp.read",
+    "afp.create",
     "afp.approve",
     "afe.read",
     "afe.approve_band_c",
@@ -25,9 +26,12 @@ const ROLE_PERMISSIONS = {
     "vendors.read_summary",
     "dashboard.silva_owner",
     "notifications.read",
+    "messages.read",
+    "messages.write",
   ],
   silva_country_manager: [
     "afp.read",
+    "afp.create",
     "afp.approve",
     "afe.read",
     "afe.approve_band_c",
@@ -39,9 +43,12 @@ const ROLE_PERMISSIONS = {
     "vendors.read_summary",
     "dashboard.silva_owner",
     "notifications.read",
+    "messages.read",
+    "messages.write",
   ],
   silva_finance: [
     "afp.read",
+    "afp.create",
     "afe.read",
     "work_orders.read",
     "payment_requests.read_verified",
@@ -50,6 +57,8 @@ const ROLE_PERMISSIONS = {
     "reports.read_released",
     "dashboard.silva_owner",
     "notifications.read",
+    "messages.read",
+    "messages.write",
   ],
   spx_principal: [
     "afp.read",
@@ -70,6 +79,8 @@ const ROLE_PERMISSIONS = {
     "dashboard.spx_management",
     "audit.read",
     "notifications.read",
+    "messages.read",
+    "messages.write",
   ],
   spx_account_handler: [
     "afp.read",
@@ -88,6 +99,8 @@ const ROLE_PERMISSIONS = {
     "vendors.manage",
     "dashboard.spx_management",
     "notifications.read",
+    "messages.read",
+    "messages.write",
   ],
   spx_field_supervisor: [
     "afp.read",
@@ -96,6 +109,8 @@ const ROLE_PERMISSIONS = {
     "field_tickets.validate",
     "dashboard.spx_management",
     "notifications.read",
+    "messages.read",
+    "messages.write",
   ],
   system_admin: ["users.manage", "organizations.manage", "audit.read", "notifications.read"],
   vendor_admin: [
@@ -104,6 +119,8 @@ const ROLE_PERMISSIONS = {
     "field_tickets.create",
     "dashboard.vendor_field",
     "notifications.read",
+    "messages.read",
+    "messages.write",
   ],
   vendor_manager: [
     "work_orders.read_own",
@@ -112,6 +129,8 @@ const ROLE_PERMISSIONS = {
     "payment_requests.create",
     "dashboard.vendor_field",
     "notifications.read",
+    "messages.read",
+    "messages.write",
   ],
   vendor_supervisor: [
     "work_orders.read_own",
@@ -119,6 +138,8 @@ const ROLE_PERMISSIONS = {
     "field_tickets.review",
     "dashboard.vendor_field",
     "notifications.read",
+    "messages.read",
+    "messages.write",
   ],
   vendor_field_lead: [
     "work_orders.read_own",
@@ -127,6 +148,8 @@ const ROLE_PERMISSIONS = {
     "payment_requests.create",
     "dashboard.vendor_field",
     "notifications.read",
+    "messages.read",
+    "messages.write",
   ],
   vendor_worker: [
     "work_orders.read_own",

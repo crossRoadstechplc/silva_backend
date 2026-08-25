@@ -77,8 +77,27 @@ exports.submit = async (id, user) => {
 exports.approve = async (id, user) => {
   const row = await getScoped(id, user);
   if (row.status === "approved" || row.status === "active") return afpJson(row, user);
-  if (row.status !== "submitted") throw new AppError(400, "INVALID_STATE", "AFP must be submitted to approve.");
-  if (row.createdByUserId === user.id) {
+
+  const { isSilvaRole } = require("../utils/roles");
+  const silvaActor = isSilvaRole(user.role);
+
+  // Silva (asset owner) may approve from draft when they created the line (own budget).
+  // SPX-prepared lines still require submitted before Silva approval.
+  if (silvaActor && row.status === "draft" && row.createdByUserId === user.id) {
+    const updated = await prisma.afp_lines.update({
+      where: { id },
+      data: { status: "approved", silvaApproved: true, approvalDate: new Date() },
+    });
+    await notify.afpApproved(updated);
+    return afpJson(updated, user);
+  }
+
+  if (row.status !== "submitted") {
+    throw new AppError(400, "INVALID_STATE", "AFP must be submitted to approve.");
+  }
+  // Maker-checker: SPX-created lines cannot be approved by the same user.
+  // Silva may approve their org’s submitted lines even if they submitted (asset owner).
+  if (!silvaActor && row.createdByUserId === user.id) {
     throw new AppError(409, "MAKER_CHECKER_VIOLATION", "Actor cannot approve own submission.");
   }
   const updated = await prisma.afp_lines.update({

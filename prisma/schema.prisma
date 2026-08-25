@@ -232,6 +232,16 @@ enum GlExportStatus {
   failed
 }
 
+enum MessageCounterpartyType {
+  vendor
+  asset_owner
+}
+
+enum MessageThreadStatus {
+  open
+  archived
+}
+
 model organizations {
   id                        String           @id
   name                      String
@@ -255,6 +265,9 @@ model organizations {
   programInvitesReceived    program_org_invites[] @relation("ProgramInviteTo")
   registrationRequests      registration_requests[]
   ownedFarmEstates          farm_estates[]        @relation("FarmEstateOwner")
+  messageThreadsAsSpx       message_threads[]     @relation("MessageThreadSpxOrg")
+  messageThreadsAsCounterparty message_threads[]  @relation("MessageThreadCounterpartyOrg")
+  messagesSent              messages[]            @relation("MessageSenderOrg")
 }
 
 model registration_requests {
@@ -356,6 +369,7 @@ model programs {
   workPlanSubmissions work_plan_submissions[]
   farmBlocks      farm_blocks[]
   farmEstates     farm_estates[]
+  messageThreads  message_threads[]
 }
 
 model program_memberships {
@@ -432,6 +446,9 @@ model users {
   workPlansSubmitted work_plan_submissions[] @relation("WorkPlanSubmitter")
   workPlansReviewed  work_plan_submissions[] @relation("WorkPlanReviewer")
   blockAssignments   work_order_block_assignments[] @relation("BlockManager")
+  messageThreadsCreated message_threads[] @relation("MessageThreadCreator")
+  messagesSent          messages[]        @relation("MessageSender")
+  messageThreadReads    message_thread_reads[]
 
   @@index([organizationId])
   @@index([role])
@@ -882,6 +899,59 @@ model reports {
   releasedBy       users?       @relation(fields: [releasedByUserId], references: [id])
 
   @@index([programId, type, status])
+}
+
+model message_threads {
+  id                         String                  @id
+  programId                  String
+  spxOrganizationId          String
+  counterpartyOrganizationId String
+  counterpartyType           MessageCounterpartyType
+  subject                    String
+  status                     MessageThreadStatus     @default(open)
+  entityType                 String?
+  entityId                   String?
+  createdByUserId            String
+  lastMessageAt              DateTime                @default(now())
+  createdAt                  DateTime                @default(now())
+  updatedAt                  DateTime                @updatedAt
+
+  program                    programs                @relation(fields: [programId], references: [id])
+  spxOrganization            organizations           @relation("MessageThreadSpxOrg", fields: [spxOrganizationId], references: [id])
+  counterpartyOrganization   organizations           @relation("MessageThreadCounterpartyOrg", fields: [counterpartyOrganizationId], references: [id])
+  createdBy                  users                   @relation("MessageThreadCreator", fields: [createdByUserId], references: [id])
+  messages                   messages[]
+  reads                      message_thread_reads[]
+
+  @@index([programId, counterpartyOrganizationId])
+  @@index([programId, lastMessageAt])
+  @@index([programId, counterpartyType])
+}
+
+model messages {
+  id                   String   @id
+  threadId             String
+  senderUserId         String
+  senderOrganizationId String
+  body                 String
+  createdAt            DateTime @default(now())
+
+  thread               message_threads @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender               users           @relation("MessageSender", fields: [senderUserId], references: [id])
+  senderOrganization   organizations   @relation("MessageSenderOrg", fields: [senderOrganizationId], references: [id])
+
+  @@index([threadId, createdAt])
+}
+
+model message_thread_reads {
+  threadId   String
+  userId     String
+  lastReadAt DateTime @default(now())
+
+  thread     message_threads @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  user       users           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([threadId, userId])
 }
 
 model notifications {

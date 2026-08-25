@@ -21,6 +21,7 @@ async function alreadyNotified({
   programId,
   dedupeHours = 24,
 }) {
+  if (dedupeHours <= 0) return false;
   const since = new Date(Date.now() - dedupeHours * 3600 * 1000);
   const existing = await prisma.notifications.findFirst({
     where: {

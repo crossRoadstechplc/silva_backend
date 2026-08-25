@@ -643,6 +643,11 @@ exports.listAttachments = async (query, user) => {
   if (!query.entityType || !query.entityId) {
     throw new AppError(400, "VALIDATION_ERROR", "entityType and entityId are required.");
   }
+  if (query.entityType === "message") {
+    const messageService = require("./message.service");
+    const ok = await messageService.userCanAccessMessageEntity(query.entityId, user);
+    if (!ok) throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
+  }
   const rows = await prisma.attachments.findMany({
     where: { entityType: query.entityType, entityId: query.entityId },
     orderBy: { createdAt: "desc" },
@@ -661,11 +666,21 @@ exports.listAttachments = async (query, user) => {
 };
 
 exports.uploadUrl = async (dto, user) => {
+  if (dto.entityType === "message") {
+    const messageService = require("./message.service");
+    const ok = await messageService.userCanAccessMessageEntity(dto.entityId, user);
+    if (!ok) throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
+  }
   const storageKey = `${dto.entityType}/${dto.entityId}/${dto.fileName}`;
   return signedUploadUrl(storageKey, dto.contentType);
 };
 
 exports.createAttachment = async (dto, user) => {
+  if (dto.entityType === "message") {
+    const messageService = require("./message.service");
+    const ok = await messageService.userCanAccessMessageEntity(dto.entityId, user);
+    if (!ok) throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
+  }
   const row = await prisma.attachments.create({
     data: {
       id: uuid("att"),
@@ -694,6 +709,11 @@ exports.createAttachment = async (dto, user) => {
 exports.findAttachment = async (id, user) => {
   const row = await prisma.attachments.findUnique({ where: { id } });
   if (!row) throw new AppError(404, "NOT_FOUND", "Attachment not found.");
+  if (row.entityType === "message") {
+    const messageService = require("./message.service");
+    const ok = await messageService.userCanAccessMessageEntity(row.entityId, user);
+    if (!ok) throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
+  }
   const urls = await signedDownloadUrl(row.storageKey);
   return {
     id: row.id,
@@ -713,6 +733,16 @@ exports.findAttachment = async (id, user) => {
 exports.deleteAttachment = async (id, user) => {
   const row = await prisma.attachments.findUnique({ where: { id } });
   if (!row) throw new AppError(404, "NOT_FOUND", "Attachment not found.");
+  if (row.entityType === "message") {
+    const messageService = require("./message.service");
+    const ok = await messageService.userCanAccessMessageEntity(row.entityId, user);
+    if (!ok) throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
+    if (row.uploadedByUserId !== user.id && !["spx_principal", "spx_account_handler"].includes(user.role)) {
+      throw new AppError(403, "FORBIDDEN", "Only the uploader can delete this attachment.");
+    }
+    await prisma.attachments.delete({ where: { id } });
+    return;
+  }
   const parentDraft = await isParentDraft(row.entityType, row.entityId);
   if (!parentDraft) throw new AppError(400, "INVALID_STATE", "Attachments on non-draft parents cannot be deleted.");
   await prisma.attachments.delete({ where: { id } });

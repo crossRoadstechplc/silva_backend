@@ -330,6 +330,27 @@ const seasonWindowCreate = z.object({
   notes: z.string().optional(),
 });
 
+const messageThreadCreate = z.object({
+  subject: z.string().min(1).max(200),
+  body: z.string().min(1).max(10000),
+  counterpartyType: z.enum(["vendor", "asset_owner"]).optional(),
+  counterpartyOrganizationId: z.string().min(1).optional(),
+  entityType: z.string().min(1).optional(),
+  entityId: z.string().min(1).optional(),
+});
+const messageReply = z.object({
+  body: z.string().min(1).max(10000),
+});
+const messageThreadPatch = z
+  .object({
+    status: z.enum(["open", "archived"]).optional(),
+    entityType: z.string().nullable().optional(),
+    entityId: z.string().nullable().optional(),
+  })
+  .refine((data) => Object.values(data).some((v) => v !== undefined), {
+    message: "At least one field is required.",
+  });
+
 module.exports = {
   commentBody,
   reasonBody,
@@ -382,4 +403,7 @@ module.exports = {
   farmEstateUpdate,
   farmEstateVendors,
   farmBlockCreate,
+  messageThreadCreate,
+  messageReply,
+  messageThreadPatch,
 };

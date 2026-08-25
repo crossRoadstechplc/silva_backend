@@ -1,4 +1,5 @@
 const { createNotification } = require("../jobs/queues");
+const prisma = require("../config/database");
 
 async function safeNotify(payload) {
   try {
@@ -8,15 +9,24 @@ async function safeNotify(payload) {
   }
 }
 
-async function notifyRoles({ programId, triggerType, entityType, entityId, roles, message }) {
+async function notifyRoles({ programId, triggerType, entityType, entityId, roles, message, dedupeHours }) {
   await Promise.all(
     roles.map((recipientRole) =>
-      safeNotify({ programId, triggerType, entityType, entityId, recipientRole, message }),
+      safeNotify({ programId, triggerType, entityType, entityId, recipientRole, message, dedupeHours }),
     ),
   );
 }
 
-async function notifyUser({ programId, triggerType, entityType, entityId, recipientUserId, recipientRole, message }) {
+async function notifyUser({
+  programId,
+  triggerType,
+  entityType,
+  entityId,
+  recipientUserId,
+  recipientRole,
+  message,
+  dedupeHours,
+}) {
   if (!recipientUserId) return;
   await safeNotify({
     programId,
@@ -26,6 +36,7 @@ async function notifyUser({ programId, triggerType, entityType, entityId, recipi
     recipientUserId,
     recipientRole: recipientRole || "vendor_field_lead",
     message,
+    dedupeHours,
   });
 }
 
@@ -377,4 +388,64 @@ exports.contactReceived = async (submission) => {
     roles: ["spx_principal", "system_admin"],
     message: `Contact form: ${submission.subject} — from ${submission.name}.`,
   });
+};
+
+/** Direct Messages (SPX ↔ vendor / asset owner) */
+exports.messageReceived = async ({
+  programId,
+  threadId,
+  subject,
+  preview,
+  senderUserId,
+  senderOrganizationId,
+  spxOrganizationId,
+  counterpartyOrganizationId,
+  counterpartyType,
+}) => {
+  const snippet = String(preview || "").slice(0, 120);
+  const message = `New message on “${subject}”: ${snippet}`;
+  const toSpx = senderOrganizationId !== spxOrganizationId;
+  const roles = toSpx
+    ? ["spx_principal", "spx_account_handler", "spx_field_supervisor"]
+    : counterpartyType === "vendor"
+      ? ["vendor_admin", "vendor_manager", "vendor_supervisor", "vendor_field_lead"]
+      : ["silva_owner", "silva_country_manager", "silva_finance"];
+
+  const counterpartOrgId = toSpx ? spxOrganizationId : counterpartyOrganizationId;
+  const users = await prisma.users.findMany({
+    where: {
+      organizationId: counterpartOrgId,
+      role: { in: roles },
+      active: true,
+      id: { not: senderUserId },
+    },
+    select: { id: true, role: true },
+  });
+
+  await Promise.all(
+    users.map((u) =>
+      notifyUser({
+        programId,
+        triggerType: "message_received",
+        entityType: "message_thread",
+        entityId: threadId,
+        recipientUserId: u.id,
+        recipientRole: u.role,
+        message,
+        dedupeHours: 0,
+      }),
+    ),
+  );
+
+  if (users.length === 0) {
+    await notifyRoles({
+      programId,
+      triggerType: "message_received",
+      entityType: "message_thread",
+      entityId: threadId,
+      roles,
+      message,
+      dedupeHours: 0,
+    });
+  }
 };

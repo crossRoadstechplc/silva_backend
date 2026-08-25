@@ -7,16 +7,18 @@ const planning = require("../controllers/planning.controller");
 const schemas = require("../schemas");
 
 const SPX_PLAN = ["spx_principal", "spx_account_handler"];
+const SILVA_PLAN = ["silva_owner", "silva_country_manager", "silva_finance"];
+const AFP_CREATE = [...SPX_PLAN, ...SILVA_PLAN];
 const SILVA_APPROVE = ["silva_owner", "silva_country_manager"];
 
 const afpRoutes = express.Router();
 afpRoutes.use(authenticateJWT);
 afpRoutes.get("/", planning.findAllAfp);
-afpRoutes.post("/", requireRole(SPX_PLAN), validate(schemas.afpCreate), auditLog("afp_line"), planning.createAfp);
+afpRoutes.post("/", requireRole(AFP_CREATE), validate(schemas.afpCreate), auditLog("afp_line"), planning.createAfp);
 afpRoutes.get("/:afpLineId", planning.findOneAfp);
 afpRoutes.get("/:afpLineId/schedule", planning.afpSchedule);
-afpRoutes.patch("/:afpLineId", requireRole(SPX_PLAN), auditLog("afp_line"), planning.updateAfp);
-afpRoutes.post("/:afpLineId/submit", requireRole(SPX_PLAN), auditLog("afp_line"), planning.submitAfp);
+afpRoutes.patch("/:afpLineId", requireRole(AFP_CREATE), auditLog("afp_line"), planning.updateAfp);
+afpRoutes.post("/:afpLineId/submit", requireRole(AFP_CREATE), auditLog("afp_line"), planning.submitAfp);
 afpRoutes.post("/:afpLineId/approve", requireRole(SILVA_APPROVE), auditLog("afp_line"), planning.approveAfp);
 afpRoutes.post("/:afpLineId/close", requireRole(["spx_principal"]), auditLog("afp_line"), planning.closeAfp);
 
