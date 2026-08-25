@@ -36,7 +36,8 @@ exports.upload = catchAsync(async (req, res) => {
   if (!buffer || !buffer.length) {
     return res.status(400).json({ error: { code: "INVALID_BODY", message: "Upload body required." } });
   }
-  const data = await workPlanSubmission.uploadExcel(req.params.id, buffer, req.user);
+  const sectionCode = req.query.sectionCode || req.headers["x-work-plan-section"] || null;
+  const data = await workPlanSubmission.uploadExcel(req.params.id, buffer, req.user, { sectionCode });
   res.json({ data });
 });
 

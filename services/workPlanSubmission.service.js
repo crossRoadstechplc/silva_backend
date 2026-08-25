@@ -97,9 +97,10 @@ async function getScoped(id, user) {
   return row;
 }
 
-function assertVendorAdmin(user) {
-  if (!isVendorRole(user.role) || user.role !== "vendor_admin") {
-    throw new AppError(403, "FORBIDDEN", "Only vendor admin can manage work plan submissions.");
+function assertVendorCanManageWorkPlan(user) {
+  const allowed = new Set(["vendor_admin", "vendor_manager", "vendor_supervisor", "vendor_field_lead"]);
+  if (!isVendorRole(user.role) || !allowed.has(user.role)) {
+    throw new AppError(403, "FORBIDDEN", "Vendor roles can manage work plan submissions.");
   }
   if (!user.vendorId) throw new AppError(400, "NO_VENDOR", "User is not linked to a vendor.");
 }
@@ -137,7 +138,7 @@ exports.findAll = async (query, user) => {
 exports.findOne = async (id, user) => submissionJson(await getScoped(id, user));
 
 exports.create = async (dto, user) => {
-  assertVendorAdmin(user);
+  assertVendorCanManageWorkPlan(user);
   const programId = requireProgramId(user);
   const fx = dto.fxEtbPerUsd || 130;
   const estateFields = await applyEstateToSubmission(dto, user, programId);
@@ -168,7 +169,7 @@ exports.create = async (dto, user) => {
 };
 
 exports.update = async (id, dto, user) => {
-  assertVendorAdmin(user);
+  assertVendorCanManageWorkPlan(user);
   const row = await getScoped(id, user);
   if (!["draft", "revision_requested"].includes(row.status)) {
     throw new AppError(400, "INVALID_STATE", "Only draft or revision-requested submissions can be edited.");
@@ -210,7 +211,7 @@ exports.update = async (id, dto, user) => {
 };
 
 exports.updateParsed = async (id, parsedJson, user) => {
-  assertVendorAdmin(user);
+  assertVendorCanManageWorkPlan(user);
   const row = await getScoped(id, user);
   if (!["draft", "revision_requested"].includes(row.status)) {
     throw new AppError(400, "INVALID_STATE", "Only draft or revision-requested submissions can be edited.");
@@ -224,13 +225,23 @@ exports.updateParsed = async (id, parsedJson, user) => {
   return submissionJson(updated);
 };
 
-exports.uploadExcel = async (id, buffer, user) => {
-  assertVendorAdmin(user);
+exports.uploadExcel = async (id, buffer, user, options = {}) => {
+  assertVendorCanManageWorkPlan(user);
   const row = await getScoped(id, user);
   if (!["draft", "revision_requested"].includes(row.status)) {
     throw new AppError(400, "INVALID_STATE", "Only draft submissions accept uploads.");
   }
-  const parsed = workPlanImport.parseExcelBuffer(buffer, Number(row.fxEtbPerUsd));
+  const fx = Number(row.fxEtbPerUsd);
+  const sectionCode = options.sectionCode ? String(options.sectionCode).trim() : null;
+  if (!sectionCode) {
+    throw new AppError(
+      400,
+      "SECTION_REQUIRED",
+      "Select which operation this Excel belongs to (e.g. Young Coffee) before uploading.",
+    );
+  }
+  const incoming = workPlanImport.parseExcelBuffer(buffer, fx, { sectionCode });
+  const parsed = workPlanImport.mergeParsedUpload(row.parsedJson, incoming, fx);
   const updated = await prisma.work_plan_submissions.update({
     where: { id },
     data: { parsedJson: parsed },
@@ -240,7 +251,7 @@ exports.uploadExcel = async (id, buffer, user) => {
 };
 
 exports.submit = async (id, user) => {
-  assertVendorAdmin(user);
+  assertVendorCanManageWorkPlan(user);
   const row = await getScoped(id, user);
   if (row.status === "submitted") return submissionJson(row);
   if (!["draft", "revision_requested"].includes(row.status)) {
