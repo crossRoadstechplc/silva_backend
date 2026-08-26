@@ -111,6 +111,44 @@ enum WorkPlanSubmissionStatus {
   rejected
 }
 
+enum ActivityRequestOrigin {
+  silva_request
+  vendor_request
+}
+
+enum ActivityRequestStatus {
+  submitted
+  converted
+  dismissed
+}
+
+enum ActivityRequestType {
+  coffee_testing
+  farm_status_assessment
+  soil_analysis
+  quality_audit
+  infrastructure_inspection
+  urgent_field_work
+  other
+}
+
+enum ActivityRequestUrgency {
+  normal
+  high
+  urgent
+}
+
+enum AfeOrigin {
+  spx_initiated
+  silva_request
+  vendor_request
+}
+
+enum AfePlanningMode {
+  planned
+  ad_hoc
+}
+
 enum FarmEstateStatus {
   active
   inactive
@@ -370,6 +408,7 @@ model programs {
   farmBlocks      farm_blocks[]
   farmEstates     farm_estates[]
   messageThreads  message_threads[]
+  activityRequests activity_requests[]
 }
 
 model program_memberships {
@@ -449,6 +488,7 @@ model users {
   messageThreadsCreated message_threads[] @relation("MessageThreadCreator")
   messagesSent          messages[]        @relation("MessageSender")
   messageThreadReads    message_thread_reads[]
+  activityRequests      activity_requests[]
 
   @@index([organizationId])
   @@index([role])
@@ -534,6 +574,7 @@ model vendors {
   scorecards                vendor_scorecards[]
   workPlanSubmissions       work_plan_submissions[]
   farmEstateVendors         farm_estate_vendors[]
+  activityRequests          activity_requests[]
 }
 
 model afp_lines {
@@ -560,35 +601,42 @@ model afp_lines {
   afes                  afes[]
   activityCatalog       activity_catalog[]
   lineSchedules         afp_line_schedules[]
+  activityRequests      activity_requests[]
 
   @@index([programId, year, status])
   @@index([workPlanSubmissionId])
 }
 
 model afes {
-  id                    String    @id
+  id                    String          @id
   programId             String
-  afpLineId             String
+  afpLineId             String?
   operatingDiscipline   String
   description           String
-  estimatedCostUsd      Decimal   @db.Decimal(14, 2)
+  estimatedCostUsd      Decimal         @db.Decimal(14, 2)
   band                  AfeBand
-  spxValidated          Boolean   @default(false)
+  planningMode          AfePlanningMode @default(planned)
+  origin                AfeOrigin       @default(spx_initiated)
+  activityRequestId     String?         @unique
+  spxValidated          Boolean         @default(false)
   silvaApprovalRequired Boolean
   silvaApproved         Boolean?
   approvalDate          DateTime?
-  status                AfeStatus @default(draft)
+  status                AfeStatus       @default(draft)
   createdByUserId       String
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
 
-  program               programs  @relation(fields: [programId], references: [id])
-  afp                   afp_lines @relation(fields: [afpLineId], references: [id])
-  createdBy             users     @relation(fields: [createdByUserId], references: [id])
+  program               programs            @relation(fields: [programId], references: [id])
+  afp                   afp_lines?          @relation(fields: [afpLineId], references: [id])
+  createdBy             users               @relation(fields: [createdByUserId], references: [id])
+  activityRequest       activity_requests?  @relation(fields: [activityRequestId], references: [id])
   workOrders            work_orders[]
   contracts             vendor_contracts[]
 
   @@index([programId, status, band])
+  @@index([planningMode, origin])
+  @@index([programId, planningMode])
 }
 
 model work_orders {
@@ -1115,6 +1163,7 @@ model activity_catalog {
   schedules       activity_schedule[]
   workOrders      work_orders[]
   fieldTickets    field_tickets[]
+  activityRequests activity_requests[]
 
   @@index([programId, afpLineId])
   @@index([programId, sectionCode])
@@ -1181,10 +1230,50 @@ model work_plan_submissions {
   submittedBy         users?                   @relation("WorkPlanSubmitter", fields: [submittedByUserId], references: [id])
   reviewedBy          users?                   @relation("WorkPlanReviewer", fields: [reviewedByUserId], references: [id])
   afpLines            afp_lines[]
+  activityRequests    activity_requests[]
 
   @@index([programId, status])
   @@index([vendorId, budgetYearGc])
   @@index([farmEstateId])
+}
+
+model activity_requests {
+  id                   String                 @id
+  programId            String
+  farmEstateId         String?
+  requestType          ActivityRequestType
+  title                String
+  description          String?
+  urgency              ActivityRequestUrgency @default(normal)
+  blocksOrAreas        String?
+  blockCode            String?
+  status               ActivityRequestStatus  @default(submitted)
+  origin               ActivityRequestOrigin
+  requestedByUserId    String
+  vendorId             String?
+  activityCatalogId    String?
+  workPlanSubmissionId String?
+  suggestedAfpLineId   String?
+  convertedAfeId       String?
+  dismissalReason      String?
+  convertedAt          DateTime?
+  dismissedAt          DateTime?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  program              programs               @relation(fields: [programId], references: [id])
+  farmEstate           farm_estates?          @relation(fields: [farmEstateId], references: [id])
+  suggestedAfpLine     afp_lines?             @relation(fields: [suggestedAfpLineId], references: [id])
+  requestedBy          users                  @relation(fields: [requestedByUserId], references: [id])
+  vendor               vendors?               @relation(fields: [vendorId], references: [id])
+  activityCatalog      activity_catalog?      @relation(fields: [activityCatalogId], references: [id])
+  workPlanSubmission   work_plan_submissions? @relation(fields: [workPlanSubmissionId], references: [id])
+  convertedAfe         afes?
+
+  @@index([origin, status])
+  @@index([programId, status])
+  @@index([requestedByUserId])
+  @@index([vendorId])
 }
 
 model farm_estates {
@@ -1204,6 +1293,7 @@ model farm_estates {
   vendorMaps          farm_estate_vendors[]
   blocks              farm_blocks[]
   workPlanSubmissions work_plan_submissions[]
+  activityRequests    activity_requests[]
 
   @@unique([programId, name])
   @@index([programId, status])

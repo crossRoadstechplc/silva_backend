@@ -23,7 +23,7 @@ async function fxRate(programId) {
   return cfg ? Number(cfg.fxRateEtbPerUsd) : 57.2;
 }
 
-async function silvaOwnerPayload(year, programId) {
+async function silvaOwnerPayload(year, programId, farmEstateId = null) {
   const afps = await prisma.afp_lines.findMany({ where: { year, programId } });
   const afes = await prisma.afes.findMany({
     where: { programId, silvaApprovalRequired: true, status: "validated" },
@@ -81,6 +81,8 @@ async function silvaOwnerPayload(year, programId) {
     percent: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length),
   }));
 
+  const estateMap = await buildEstateMap(programId, farmEstateId);
+
   return {
     year,
     afpStatus: {
@@ -113,6 +115,77 @@ async function silvaOwnerPayload(year, programId) {
       quarterlyBoardPackActive: reports.some((r) => r.type === "quarterly"),
       releasedCount: reports.length,
     },
+    estateMap,
+  };
+}
+
+async function buildEstateMap(programId, farmEstateId) {
+  const estate = await prisma.farm_estates.findFirst({
+    where: {
+      programId,
+      status: "active",
+      ...(farmEstateId ? { id: farmEstateId } : {}),
+    },
+    include: {
+      blocks: { orderBy: { code: "asc" } },
+    },
+    orderBy: { name: "asc" },
+  });
+  if (!estate && farmEstateId) {
+    return buildEstateMap(programId, null);
+  }
+  if (!estate) return null;
+
+  const blockIds = estate.blocks.map((b) => b.id);
+  const assignments = blockIds.length
+    ? await prisma.work_order_block_assignments.findMany({
+        where: { blockId: { in: blockIds } },
+        include: {
+          workOrder: { select: { id: true, status: true, activity: true, updatedAt: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      })
+    : [];
+
+  const latestByBlock = {};
+  for (const row of assignments) {
+    if (!latestByBlock[row.blockId]) latestByBlock[row.blockId] = row.workOrder;
+  }
+
+  const blocks = estate.blocks.map((block) => {
+    const wo = latestByBlock[block.id] || null;
+    let health = "on_track";
+    if (wo) {
+      if (["issued", "in_progress"].includes(wo.status)) health = "watch";
+      if (wo.status === "draft") health = "watch";
+    }
+    return {
+      id: block.id,
+      code: block.code,
+      label: block.label || `Block ${block.code}`,
+      areaHa: block.areaHa != null ? Number(block.areaHa) : null,
+      workOrderId: wo?.id || null,
+      workOrderStatus: wo?.status || null,
+      activity: wo?.activity || null,
+      health,
+    };
+  });
+
+  // Stable demo climate for field overview (no weather feed yet).
+  const seed = Array.from(estate.id).reduce((s, c) => s + c.charCodeAt(0), 0);
+  const climate = {
+    tempC: Math.round((18 + (seed % 80) / 10) * 10) / 10,
+    humidityPct: 55 + (seed % 30),
+    rainfallMm: Math.round((2 + (seed % 50) / 10) * 10) / 10,
+  };
+
+  return {
+    estateId: estate.id,
+    name: estate.name,
+    location: estate.location,
+    totalAreaHa: estate.totalAreaHa != null ? Number(estate.totalAreaHa) : null,
+    climate,
+    blocks,
   };
 }
 
@@ -204,7 +277,8 @@ exports.silvaOwner = async (user, query) => {
     throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
   }
   const year = Number(query.year) || new Date().getUTCFullYear();
-  return silvaOwnerPayload(year, requireProgramId(user));
+  const farmEstateId = farmEstateScope.parseFarmEstateId(query);
+  return silvaOwnerPayload(year, requireProgramId(user), farmEstateId);
 };
 
 exports.spxManagement = async (user, query) => {
@@ -212,7 +286,7 @@ exports.spxManagement = async (user, query) => {
   const year = Number(query.year) || new Date().getUTCFullYear();
   const programId = requireProgramId(user);
   const farmEstateId = farmEstateScope.parseFarmEstateId(query);
-  const silva = await silvaOwnerPayload(year, programId);
+  const silva = await silvaOwnerPayload(year, programId, farmEstateId);
   const awaiting = await fieldTicketCountForEstate(programId, farmEstateId, {
     status: { in: ["submitted", "vendor_reviewed"] },
   });

@@ -213,6 +213,8 @@ exports.listThreads = async (query, user) => {
   } else if (!query.status) {
     where.status = "open";
   }
+  if (query.entityType) where.entityType = String(query.entityType);
+  if (query.entityId) where.entityId = String(query.entityId);
 
   if (isVendorRole(user.role)) {
     where.counterpartyOrganizationId = user.organizationId;

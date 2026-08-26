@@ -449,3 +449,42 @@ exports.messageReceived = async ({
     });
   }
 };
+
+/** Ad-hoc requests (Silva → SPX) */
+exports.adHocRequestSubmitted = async (req) => {
+  await notifyRoles({
+    programId: req.programId,
+    triggerType: "adhoc_submitted",
+    entityType: "ad_hoc_request",
+    entityId: req.id,
+    roles: ["spx_principal", "spx_account_handler", "spx_field_supervisor"],
+    message: `Ad-hoc request submitted: ${req.title}`,
+    dedupeHours: 1,
+  });
+};
+
+exports.adHocRequestDismissed = async (req) => {
+  await notifyUser({
+    programId: req.programId,
+    triggerType: "adhoc_dismissed",
+    entityType: "ad_hoc_request",
+    entityId: req.id,
+    recipientUserId: req.requestedByUserId,
+    recipientRole: "silva_owner",
+    message: `Ad-hoc request dismissed: ${req.title}${req.reviewNotes ? ` — ${req.reviewNotes}` : ""}`,
+    dedupeHours: 1,
+  });
+};
+
+exports.adHocRequestConverted = async (req, afe) => {
+  await notifyUser({
+    programId: req.programId,
+    triggerType: "adhoc_converted",
+    entityType: "afe",
+    entityId: afe.id,
+    recipientUserId: req.requestedByUserId,
+    recipientRole: "silva_owner",
+    message: `Ad-hoc request converted to AFE ${afe.id}: ${req.title}`,
+    dedupeHours: 1,
+  });
+};

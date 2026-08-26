@@ -46,6 +46,7 @@ const farmEstateRoutes = require("./routes/farmEstate.routes");
 const registrationRequestRoutes = require("./routes/registrationRequest.routes");
 const contactRoutes = require("./routes/contact.routes");
 const messageRoutes = require("./routes/message.routes");
+const adHocRequestRoutes = require("./routes/adHocRequest.routes");
 const setProgramRls = require("./middleware/setProgramRls");
 
 const app = express();
@@ -119,6 +120,7 @@ app.use("/api/v1/farm-estates", ...programScoped, farmEstateRoutes);
 app.use("/api/v1/items", itemRoutes);
 app.use("/api/v1/exports", ...programScoped, exportRoutes);
 app.use("/api/v1/messages", ...programScoped, messageRoutes);
+app.use("/api/v1/ad-hoc-requests", ...programScoped, adHocRequestRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

@@ -75,6 +75,7 @@ function afeJson(row) {
     description: row.description,
     estimatedCostUsd: money(row.estimatedCostUsd),
     band: row.band,
+    planningMode: row.planningMode || "planned",
     spxValidated: row.spxValidated,
     silvaApprovalRequired: row.silvaApprovalRequired,
     silvaApproved: row.silvaApproved,

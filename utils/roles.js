@@ -13,7 +13,6 @@ const VENDOR_ROLES = [
 const ROLE_PERMISSIONS = {
   silva_owner: [
     "afp.read",
-    "afp.create",
     "afp.approve",
     "afe.read",
     "afe.approve_band_c",
@@ -31,7 +30,6 @@ const ROLE_PERMISSIONS = {
   ],
   silva_country_manager: [
     "afp.read",
-    "afp.create",
     "afp.approve",
     "afe.read",
     "afe.approve_band_c",
@@ -48,7 +46,6 @@ const ROLE_PERMISSIONS = {
   ],
   silva_finance: [
     "afp.read",
-    "afp.create",
     "afe.read",
     "work_orders.read",
     "payment_requests.read_verified",

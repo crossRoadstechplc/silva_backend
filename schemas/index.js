@@ -125,6 +125,47 @@ const coaCreate = z.object({
   description: z.string().optional(),
 });
 
+const adHocRequestCreate = z.object({
+  title: z.string().min(1),
+  description: z.string().nullable().optional(),
+  operatingDiscipline: z.string().min(1).optional(),
+  urgency: z.enum(["low", "normal", "high", "emergency", "urgent"]).optional(),
+  estimatedCostUsd: z.number().positive().nullable().optional(),
+  farmEstateId: z.string().nullable().optional(),
+  submit: z.boolean().optional(),
+});
+
+const adHocRequestUpdate = z
+  .object({
+    title: z.string().min(1).optional(),
+    description: z.string().nullable().optional(),
+    operatingDiscipline: z.string().min(1).optional(),
+    urgency: z.enum(["low", "normal", "high", "emergency", "urgent"]).optional(),
+    estimatedCostUsd: z.number().positive().nullable().optional(),
+    farmEstateId: z.string().nullable().optional(),
+  })
+  .refine((data) => Object.values(data).some((v) => v !== undefined), {
+    message: "At least one field is required.",
+  });
+
+const adHocRequestDismiss = z.object({
+  notes: z.string().min(1).optional(),
+  reason: z.string().min(1).optional(),
+}).refine((data) => Boolean((data.notes || data.reason || "").trim()), {
+  message: "Dismissal reason is required.",
+});
+
+const adHocRequestConvert = z.object({
+  afpLineId: z
+    .union([z.string().min(1), z.literal(""), z.null()])
+    .optional()
+    .transform((v) => (v && String(v).trim() ? String(v).trim() : null)),
+  operatingDiscipline: z.string().min(1).optional(),
+  description: z.string().min(1).optional(),
+  estimatedCostUsd: z.number().positive(),
+  notes: z.string().optional(),
+});
+
 const workPlanCreate = z.object({
   farmEstateId: z.string().min(1),
   totalAreaHa: z.number().positive().optional(),
@@ -406,4 +447,8 @@ module.exports = {
   messageThreadCreate,
   messageReply,
   messageThreadPatch,
+  adHocRequestCreate,
+  adHocRequestUpdate,
+  adHocRequestDismiss,
+  adHocRequestConvert,
 };
