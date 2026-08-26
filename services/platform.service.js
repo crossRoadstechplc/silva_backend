@@ -191,13 +191,53 @@ exports.generateReport = async (type, dto, user) => {
   }
   const period = dto.period || dto.periodStart || new Date().toISOString().slice(0, 7);
   const { items } = await exports.budgetVsActual({ year: Number(String(period).slice(0, 4)), pageSize: 100 }, user);
+  const year = Number(String(period).slice(0, 4));
+  const ownerRequested = await prisma.activity_requests.findMany({
+    where: {
+      programId,
+      origin: "silva_request",
+      status: "converted",
+      convertedAt: {
+        gte: new Date(`${String(period).length === 7 ? `${period}-01` : period}T00:00:00.000Z`),
+      },
+    },
+    take: 50,
+    orderBy: { convertedAt: "desc" },
+  });
+  const afeStats = {
+    pendingSilvaApproval: await prisma.afes.count({
+      where: { programId, silvaApprovalRequired: true, status: "validated" },
+    }),
+    approved: await prisma.afes.count({
+      where: { programId, status: { in: ["approved", "active"] } },
+    }),
+  };
+  const harvest = await prisma.harvest_kpi_snapshots.findUnique({
+    where: { programId_year: { programId, year } },
+  });
   const row = await prisma.reports.create({
     data: programCreateData(user, {
       id: `rpt_${String(period).replace(/-/g, "_")}_${type}`,
       type,
       period: String(period),
       status: "draft",
-      sections: { budget_vs_actual: items },
+      sections: {
+        budget_vs_actual: items,
+        afe_summary: afeStats,
+        harvest_kpis: harvest
+          ? {
+              pickerProductivityCurrent: Number(harvest.pickerProductivityCurrent),
+              yieldTrendVsBaselinePercent: Number(harvest.yieldTrendVsBaselinePercent),
+            }
+          : null,
+        owner_requested_activities: ownerRequested.map((r) => ({
+          id: r.id,
+          title: r.title,
+          requestType: r.requestType,
+          convertedAfeId: r.convertedAfeId,
+          convertedAt: r.convertedAt?.toISOString() || null,
+        })),
+      },
     }),
   });
   await notify.reportGenerated(row);

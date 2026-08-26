@@ -152,6 +152,9 @@ async function main() {
       location: "Kaffa Zone",
       notes: "Primary B-Agro execution estate",
       status: "active",
+      demoTempC: 20.2,
+      demoHumidityPct: 78,
+      demoRainfallMm: 14.5,
       vendorMaps: {
         create: { id: "fev_bagro_chetu", vendorId: bagro.id, isPrimary: true },
       },
@@ -161,6 +164,7 @@ async function main() {
           programId: program.id,
           code,
           label: `Block ${code}`,
+          areaHa: code <= "F" ? 18 + (code.charCodeAt(0) - 65) * 1.5 : null,
         })),
       },
     },
@@ -174,6 +178,9 @@ async function main() {
       totalAreaHa: 210,
       location: "Shecha",
       status: "active",
+      demoTempC: 19.5,
+      demoHumidityPct: 80,
+      demoRainfallMm: 11,
       vendorMaps: {
         create: { id: "fev_bagro_shecha", vendorId: bagro.id, isPrimary: false },
       },
@@ -223,6 +230,7 @@ async function main() {
   await user("usr_spx_supervisor", "SPX Field Supervisor", "supervisor@spx.example", "spx_field_supervisor", spx.id);
   await user("usr_spx_admin", "System Admin", "admin@spx.example", "system_admin", spx.id);
   await user("usr_bagro_admin", "B-Agro Admin", "admin@bagro.example", "vendor_admin", bagroOrg.id, bagro.id);
+  await user("usr_bagro_manager", "B-Agro Manager", "manager@bagro.example", "vendor_manager", bagroOrg.id, bagro.id);
   const lead = await user("usr_bagro_lead", "Dawit Bekele", "lead@bagro.example", "vendor_field_lead", bagroOrg.id, bagro.id);
   await user("usr_bagro_super", "B-Agro Supervisor", "supervisor@bagro.example", "vendor_supervisor", bagroOrg.id, bagro.id);
   await user("usr_bagro_worker", "B-Agro Worker", "worker@bagro.example", "vendor_worker", bagroOrg.id, bagro.id);
@@ -746,6 +754,24 @@ async function main() {
         message: "Work order WO-0001 issued — ready for field execution.",
       },
     ],
+  });
+
+  await prisma.activity_requests.create({
+    data: {
+      id: "act_01",
+      programId: program.id,
+      farmEstateId: "fest_chetu",
+      requestType: "coffee_testing",
+      title: "Export lot cupping — Lot X",
+      description: "Panel for Lot X before shipment",
+      urgency: "normal",
+      blocksOrAreas: "Block 3",
+      blockCode: "C",
+      status: "submitted",
+      origin: "silva_request",
+      requestedByUserId: "usr_silva_owner",
+      suggestedAfpLineId: "AFP-2026-001",
+    },
   });
 
   console.log("Seed complete. Program:", PROGRAM_ID, "Password: Password123!");

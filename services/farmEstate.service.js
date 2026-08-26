@@ -14,6 +14,9 @@ function estateJson(row) {
     location: row.location,
     notes: row.notes,
     status: row.status,
+    demoTempC: row.demoTempC != null ? Number(row.demoTempC) : null,
+    demoHumidityPct: row.demoHumidityPct != null ? Number(row.demoHumidityPct) : null,
+    demoRainfallMm: row.demoRainfallMm != null ? Number(row.demoRainfallMm) : null,
     ownerOrganizationId: row.ownerOrganizationId ?? null,
     ownerOrganization: row.ownerOrganization
       ? {

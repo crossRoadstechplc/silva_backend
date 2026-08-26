@@ -37,7 +37,7 @@ exports.closeWo = catchAsync(async (req, res) => {
   res.json({ data });
 });
 exports.listAssignments = catchAsync(async (req, res) => {
-  const data = await workOrderService.listAssignments(req.params.workOrderId);
+  const data = await workOrderService.listAssignments(req.params.workOrderId, req.user);
   res.json({ data });
 });
 exports.addAssignment = catchAsync(async (req, res) => {
@@ -45,7 +45,12 @@ exports.addAssignment = catchAsync(async (req, res) => {
   res.status(201).json({ data });
 });
 exports.patchAssignment = catchAsync(async (req, res) => {
-  const data = await workOrderService.patchAssignment(req.params.workOrderId, req.params.assignmentId, req.body);
+  const data = await workOrderService.patchAssignment(
+    req.params.workOrderId,
+    req.params.assignmentId,
+    req.body,
+    req.user,
+  );
   res.json({ data });
 });
 exports.listTasks = catchAsync(async (req, res) => {

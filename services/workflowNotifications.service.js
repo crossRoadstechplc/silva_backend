@@ -378,3 +378,37 @@ exports.contactReceived = async (submission) => {
     message: `Contact form: ${submission.subject} — from ${submission.name}.`,
   });
 };
+
+/** Activity requests (ad-hoc intake) */
+exports.activityRequestSubmitted = async (request) => {
+  await notifyRoles({
+    programId: request.programId,
+    triggerType: "activity_request_submitted",
+    entityType: "activity_request",
+    entityId: request.id,
+    roles: ["spx_account_handler", "spx_principal"],
+    message: `New ${request.origin === "vendor_request" ? "vendor" : "Silva"} activity request: ${request.title}. Triage in Ad-hoc intake.`,
+  });
+};
+
+exports.activityRequestConverted = async (request, afe) => {
+  await notifyUser({
+    programId: request.programId,
+    triggerType: "activity_request_converted",
+    entityType: "activity_request",
+    entityId: request.id,
+    recipientUserId: request.requestedByUserId,
+    message: `Your request "${request.title}" was converted to ${afe.id}.`,
+  });
+};
+
+exports.activityRequestDismissed = async (request) => {
+  await notifyUser({
+    programId: request.programId,
+    triggerType: "activity_request_dismissed",
+    entityType: "activity_request",
+    entityId: request.id,
+    recipientUserId: request.requestedByUserId,
+    message: `Your request "${request.title}" was dismissed: ${request.dismissalReason || "no reason given"}.`,
+  });
+};

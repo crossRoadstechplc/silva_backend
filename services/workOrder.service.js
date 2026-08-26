@@ -188,7 +188,7 @@ exports.issue = async (id, user) => {
   if (wo.afe.status === "approved") {
     await prisma.afes.update({ where: { id: wo.afeId }, data: { status: "active" } });
   }
-  if (wo.afe.afp.status === "approved") {
+  if (wo.afe.afpLineId && wo.afe.afp?.status === "approved") {
     await prisma.afp_lines.update({ where: { id: wo.afe.afpLineId }, data: { status: "active" } });
   }
   await notify.workOrderIssued(updated);
@@ -213,37 +213,95 @@ exports.close = async (id) => {
   return workOrderJson(updated, { assignedVendorName: await resolveVendorName(updated) });
 };
 
-exports.listAssignments = async (workOrderId) => {
-  await ensureWo(workOrderId);
-  const rows = await prisma.work_order_assignments.findMany({ where: { workOrderId, active: true } });
-  return rows.map(assignmentJson);
+exports.listAssignments = async (workOrderId, user) => {
+  await ensureWoAccessible(workOrderId, user);
+  const rows = await prisma.work_order_assignments.findMany({
+    where: { workOrderId, active: true },
+    include: { user: true },
+    orderBy: [{ isPrimary: "desc" }, { createdAt: "asc" }],
+  });
+  return rows.map((row) =>
+    assignmentJson(row, {
+      userName: row.user?.name || null,
+      userEmail: row.user?.email || null,
+      userRole: row.user?.role || null,
+    }),
+  );
 };
 
 exports.addAssignment = async (workOrderId, dto, user) => {
-  const wo = await ensureWo(workOrderId);
+  const wo = await ensureWoAccessible(workOrderId, user);
+  await assertCanAssignCrew(wo, user);
+
+  if (wo.status === "closed") {
+    throw new AppError(400, "INVALID_STATE", "Cannot assign crew on a closed work order.");
+  }
+
   const assignee = await prisma.users.findUnique({ where: { id: dto.userId } });
-  if (!assignee) throw new AppError(404, "NOT_FOUND", "User not found.");
+  if (!assignee || !assignee.active) throw new AppError(404, "NOT_FOUND", "User not found.");
+
   const def = await defaultVendor();
   const vendorId = wo.assignedVendorId || def?.id;
-  if (assignee.vendorId !== vendorId) {
+  if (!vendorId || assignee.vendorId !== vendorId) {
     throw new AppError(422, "BUSINESS_RULE_VIOLATION", "Assignee must belong to the assigned vendor org.");
   }
+  if (assignee.role !== "vendor_field_lead") {
+    throw new AppError(
+      422,
+      "BUSINESS_RULE_VIOLATION",
+      "Only vendor field leads can be assigned to a work order.",
+    );
+  }
+
+  const existing = await prisma.work_order_assignments.findFirst({
+    where: { workOrderId, userId: dto.userId, active: true },
+  });
+  if (existing) {
+    throw new AppError(409, "CONFLICT", "This lead is already assigned to the work order.");
+  }
+
+  const isPrimary = Boolean(dto.isPrimary);
+  if (isPrimary) {
+    await prisma.work_order_assignments.updateMany({
+      where: { workOrderId, active: true, isPrimary: true },
+      data: { isPrimary: false },
+    });
+  }
+
   const row = await prisma.work_order_assignments.create({
     data: {
       id: uuid("woa"),
       workOrderId,
       userId: dto.userId,
-      roleOnOrder: dto.roleOnOrder,
-      isPrimary: Boolean(dto.isPrimary),
+      roleOnOrder: dto.roleOnOrder || "vendor_field_lead",
+      isPrimary,
     },
+    include: { user: true },
   });
-  return assignmentJson(row);
+  return assignmentJson(row, {
+    userName: row.user?.name || null,
+    userEmail: row.user?.email || null,
+    userRole: row.user?.role || null,
+  });
 };
 
-exports.patchAssignment = async (workOrderId, assignmentId, dto) => {
-  await ensureWo(workOrderId);
-  const row = await prisma.work_order_assignments.findUnique({ where: { id: assignmentId } });
+exports.patchAssignment = async (workOrderId, assignmentId, dto, user) => {
+  const wo = await ensureWoAccessible(workOrderId, user);
+  await assertCanAssignCrew(wo, user);
+
+  const row = await prisma.work_order_assignments.findUnique({
+    where: { id: assignmentId },
+    include: { user: true },
+  });
   if (!row || row.workOrderId !== workOrderId) throw new AppError(404, "NOT_FOUND", "Assignment not found.");
+
+  if (dto.isPrimary === true) {
+    await prisma.work_order_assignments.updateMany({
+      where: { workOrderId, active: true, isPrimary: true, NOT: { id: assignmentId } },
+      data: { isPrimary: false },
+    });
+  }
+
   const updated = await prisma.work_order_assignments.update({
     where: { id: assignmentId },
     data: {
@@ -251,8 +309,13 @@ exports.patchAssignment = async (workOrderId, assignmentId, dto) => {
       roleOnOrder: dto.roleOnOrder ?? row.roleOnOrder,
       active: dto.active === undefined ? row.active : dto.active,
     },
+    include: { user: true },
   });
-  return assignmentJson(updated);
+  return assignmentJson(updated, {
+    userName: updated.user?.name || null,
+    userEmail: updated.user?.email || null,
+    userRole: updated.user?.role || null,
+  });
 };
 
 exports.listTasks = async (workOrderId) => {
@@ -378,4 +441,22 @@ async function ensureWo(id) {
   const wo = await prisma.work_orders.findUnique({ where: { id } });
   if (!wo) throw new AppError(404, "NOT_FOUND", "Work order not found.");
   return wo;
+}
+
+async function ensureWoAccessible(id, user) {
+  const wo = await prisma.work_orders.findFirst({ where: await scopedWhereWo(user, { id }) });
+  if (!wo) throw new AppError(404, "NOT_FOUND", "Work order not found.");
+  return wo;
+}
+
+async function assertCanAssignCrew(wo, user) {
+  if (isSpxRole(user.role)) return;
+  if (!["vendor_manager", "vendor_admin"].includes(user.role)) {
+    throw new AppError(403, "FORBIDDEN", "Only vendor managers can assign field leads.");
+  }
+  const def = await defaultVendor();
+  const vendorId = wo.assignedVendorId || def?.id;
+  if (!user.vendorId || user.vendorId !== vendorId) {
+    throw new AppError(403, "FORBIDDEN", "You can only assign crew on your vendor's work orders.");
+  }
 }

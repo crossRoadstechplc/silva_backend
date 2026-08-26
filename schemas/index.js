@@ -113,11 +113,57 @@ const afpCreate = z.object({
   kpiTarget: z.string().min(1),
   notes: z.string().nullable().optional(),
 });
-const afeCreate = z.object({
-  afpLineId: z.string().min(1),
-  operatingDiscipline: z.string().min(1),
-  description: z.string().min(1),
+const afeCreate = z
+  .object({
+    afpLineId: z.string().min(1).optional().nullable(),
+    operatingDiscipline: z.string().min(1),
+    description: z.string().min(1),
+    estimatedCostUsd: z.number().positive(),
+    planningMode: z.enum(["planned", "ad_hoc"]).optional(),
+    origin: z.enum(["spx_initiated", "silva_request", "vendor_request"]).optional(),
+  })
+  .superRefine((data, ctx) => {
+    const mode = data.planningMode || "planned";
+    if (mode === "planned" && !data.afpLineId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "afpLineId is required for planned AFEs",
+        path: ["afpLineId"],
+      });
+    }
+  });
+
+const activityRequestCreate = z.object({
+  requestType: z.enum([
+    "coffee_testing",
+    "farm_status_assessment",
+    "soil_analysis",
+    "quality_audit",
+    "infrastructure_inspection",
+    "urgent_field_work",
+    "other",
+  ]),
+  title: z.string().min(1).max(200),
+  description: z.string().max(2000).optional().nullable(),
+  urgency: z.enum(["normal", "high", "urgent"]).optional(),
+  blocksOrAreas: z.string().max(200).optional().nullable(),
+  blockCode: z.string().max(40).optional().nullable(),
+  farmEstateId: z.string().min(1).optional().nullable(),
+  activityCatalogId: z.string().min(1).optional().nullable(),
+  workPlanSubmissionId: z.string().min(1).optional().nullable(),
+  suggestedAfpLineId: z.string().min(1).optional().nullable(),
+});
+
+const activityRequestConvert = z.object({
+  operatingDiscipline: z.string().min(1).optional(),
   estimatedCostUsd: z.number().positive(),
+  afpLineId: z.string().min(1).optional().nullable(),
+  description: z.string().max(500).optional().nullable(),
+  unlinkAfp: z.boolean().optional(),
+});
+
+const activityRequestDismiss = z.object({
+  reason: z.string().min(1).max(500),
 });
 const coaCreate = z.object({
   sourceAccount: z.string().min(1),
@@ -222,7 +268,7 @@ const ftCreate = z.object({
 
 const assignmentCreate = z.object({
   userId: z.string().min(1),
-  roleOnOrder: z.string().min(1),
+  roleOnOrder: z.string().min(1).optional().default("vendor_field_lead"),
   isPrimary: z.boolean().optional(),
 });
 
@@ -358,6 +404,9 @@ module.exports = {
   membershipRole,
   afpCreate,
   afeCreate,
+  activityRequestCreate,
+  activityRequestConvert,
+  activityRequestDismiss,
   woCreate,
   assignmentCreate,
   taskCreate,

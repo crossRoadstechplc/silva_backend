@@ -9,6 +9,8 @@ const schemas = require("../schemas");
 const SPX = ["spx_principal", "spx_account_handler", "spx_field_supervisor", "system_admin"];
 const VENDOR_LEAD = ["vendor_manager", "vendor_supervisor", "vendor_field_lead", "vendor_admin", ...SPX];
 const FT_CREATE = ["vendor_field_lead", "vendor_worker", "vendor_supervisor", "vendor_manager"];
+/** SPX or vendor desk managers can assign field leads on their work orders */
+const WO_ASSIGN = ["vendor_manager", "vendor_admin", ...SPX];
 
 const workOrderRoutes = express.Router();
 workOrderRoutes.use(authenticateJWT);
@@ -22,8 +24,19 @@ workOrderRoutes.post("/:workOrderId/start", auditLog("work_order"), exec.startWo
 workOrderRoutes.post("/:workOrderId/complete", auditLog("work_order"), exec.completeWo);
 workOrderRoutes.post("/:workOrderId/close", requireRole(SPX), auditLog("work_order"), exec.closeWo);
 workOrderRoutes.get("/:workOrderId/assignments", exec.listAssignments);
-workOrderRoutes.post("/:workOrderId/assignments", requireRole(SPX), validate(schemas.assignmentCreate), exec.addAssignment);
-workOrderRoutes.patch("/:workOrderId/assignments/:assignmentId", requireRole(SPX), exec.patchAssignment);
+workOrderRoutes.post(
+  "/:workOrderId/assignments",
+  requireRole(WO_ASSIGN),
+  validate(schemas.assignmentCreate),
+  auditLog("work_order"),
+  exec.addAssignment,
+);
+workOrderRoutes.patch(
+  "/:workOrderId/assignments/:assignmentId",
+  requireRole(WO_ASSIGN),
+  auditLog("work_order"),
+  exec.patchAssignment,
+);
 workOrderRoutes.get("/:workOrderId/blocks", exec.listBlockAssignments);
 workOrderRoutes.post("/:workOrderId/blocks", requireRole(SPX), exec.addBlockAssignment);
 workOrderRoutes.get("/:workOrderId/tasks", exec.listTasks);

@@ -50,6 +50,8 @@ async function silvaOwnerPayload(year, programId) {
       afpLineId: line.id,
       activity: line.activity,
       operatingDiscipline: line.operatingDiscipline,
+      budgetAllocatedUsd: money(line.budgetAllocatedUsd),
+      committedUsd: money(committed),
       utilizationPercent: percent,
       health: utilizationHealth(percent),
     });
@@ -113,6 +115,74 @@ async function silvaOwnerPayload(year, programId) {
       quarterlyBoardPackActive: reports.some((r) => r.type === "quarterly"),
       releasedCount: reports.length,
     },
+    estateMap: await buildEstateMap(programId),
+  };
+};
+
+async function buildEstateMap(programId) {
+  const estate = await prisma.farm_estates.findFirst({
+    where: { programId, status: "active", name: { contains: "Chetu" } },
+    include: {
+      blocks: { orderBy: { code: "asc" } },
+    },
+  });
+  if (!estate) {
+    const fallback = await prisma.farm_estates.findFirst({
+      where: { programId, status: "active" },
+      include: { blocks: { orderBy: { code: "asc" } } },
+      orderBy: { name: "asc" },
+    });
+    if (!fallback) return null;
+    return formatEstateMap(fallback, programId);
+  }
+  return formatEstateMap(estate, programId);
+}
+
+async function formatEstateMap(estate, programId) {
+  const mapCodes = ["A", "B", "C", "D", "E", "F"];
+  const blocks = estate.blocks.filter((b) => mapCodes.includes(b.code));
+  const blockIds = blocks.map((b) => b.id);
+  const assignments = blockIds.length
+    ? await prisma.work_order_block_assignments.findMany({
+        where: { blockId: { in: blockIds } },
+        include: {
+          workOrder: {
+            select: { id: true, status: true, activity: true, afeId: true },
+          },
+        },
+      })
+    : [];
+  const byBlock = {};
+  for (const a of assignments) {
+    if (!["issued", "in_progress", "complete"].includes(a.workOrder.status)) continue;
+    if (!byBlock[a.blockId]) byBlock[a.blockId] = a.workOrder;
+  }
+  return {
+    estateId: estate.id,
+    name: estate.name,
+    location: estate.location,
+    totalAreaHa: estate.totalAreaHa != null ? Number(estate.totalAreaHa) : null,
+    climate: {
+      tempC: estate.demoTempC != null ? Number(estate.demoTempC) : 20,
+      humidityPct: estate.demoHumidityPct != null ? Number(estate.demoHumidityPct) : 78,
+      rainfallMm: estate.demoRainfallMm != null ? Number(estate.demoRainfallMm) : 12,
+    },
+    blocks: blocks.map((b) => {
+      const wo = byBlock[b.id];
+      let health = "on_track";
+      if (wo?.status === "in_progress") health = "watch";
+      if (wo?.status === "issued") health = "on_track";
+      return {
+        id: b.id,
+        code: b.code,
+        label: b.label || `Block ${b.code}`,
+        areaHa: b.areaHa != null ? Number(b.areaHa) : null,
+        workOrderId: wo?.id || null,
+        workOrderStatus: wo?.status || null,
+        activity: wo?.activity || null,
+        health,
+      };
+    }),
   };
 }
 
@@ -238,6 +308,11 @@ exports.spxManagement = async (user, query) => {
   const payload = {
     silva,
     fieldTicketQueue: { awaitingSignOffCount: awaiting },
+    intakeQueue: {
+      awaitingTriageCount: await prisma.activity_requests.count({
+        where: { programId, status: "submitted" },
+      }),
+    },
     exceptions: await buildExceptions(programId, farmEstateId),
     vendorInsurance: { alerts: insuranceAlerts },
     reportWorkspace: {
@@ -264,6 +339,22 @@ exports.actionQueues = async (user, query = {}) => {
   const items = [];
 
   if (isSpxRole(user.role)) {
+    const pendingRequests = await prisma.activity_requests.findMany({
+      where: { programId, status: "submitted" },
+      take: 8,
+      orderBy: { createdAt: "asc" },
+    });
+    for (const ar of pendingRequests) {
+      items.push({
+        type: "activity_request_triage",
+        entityId: ar.id,
+        label: `Triage ${ar.origin === "vendor_request" ? "vendor" : "Silva"} request: ${ar.title.slice(0, 40)}`,
+        href: `/planning/intake`,
+        health: ar.urgency === "urgent" ? "overdue" : "watch",
+        priority: 0,
+      });
+    }
+
     const planWhere = { programId, status: "submitted" };
     if (farmEstateId) planWhere.farmEstateId = farmEstateId;
     const pendingPlans = await prisma.work_plan_submissions.findMany({
@@ -335,6 +426,22 @@ exports.actionQueues = async (user, query = {}) => {
         href: `/planning/afe/${a.id}`,
         health: days > 5 ? "overdue" : "watch",
         priority: 1,
+      });
+    }
+
+    const openRequests = await prisma.activity_requests.findMany({
+      where: { programId, origin: "silva_request", status: "submitted" },
+      take: 5,
+      orderBy: { createdAt: "asc" },
+    });
+    for (const ar of openRequests) {
+      items.push({
+        type: "activity_request_open",
+        entityId: ar.id,
+        label: `Awaiting SPX: ${ar.title.slice(0, 40)}`,
+        href: `/planning/requests`,
+        health: "watch",
+        priority: 2,
       });
     }
   }
@@ -444,11 +551,19 @@ exports.vendorField = async (user, query = {}) => {
     where: { vendorId: user.vendorId },
     orderBy: { createdAt: "desc" },
   });
+  const latestPlan = await prisma.work_plan_submissions.findFirst({
+    where: { programId, vendorId: user.vendorId },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true, status: true, budgetYearLabel: true },
+  });
   return {
     assignedWorkOrders: { currentCount: current, upcomingCount: upcoming },
     myTasks: { openCount: tasks, dueTodayCount: dueToday },
     fieldTickets: { draftCount: drafts, awaitingValidationCount: awaiting },
     paymentRequests: { pendingCount: pendingPr, verifiedCount: verifiedPr },
+    workPlan: latestPlan
+      ? { id: latestPlan.id, status: latestPlan.status, budgetYearLabel: latestPlan.budgetYearLabel }
+      : null,
     ownScorecard: score
       ? {
           reviewPeriod: score.reviewPeriod,

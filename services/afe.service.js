@@ -49,8 +49,21 @@ exports.findOne = async (id, user) => {
 
 exports.create = async (dto, user) => {
   const programId = requireProgramId(user);
-  const afp = await prisma.afp_lines.findFirst({ where: { id: dto.afpLineId, programId } });
-  if (!afp) throw new AppError(404, "NOT_FOUND", "AFP line not found.");
+  const planningMode = dto.planningMode || "planned";
+  let afpLineId = dto.afpLineId || null;
+
+  if (planningMode === "planned") {
+    if (!afpLineId) throw new AppError(400, "VALIDATION_ERROR", "afpLineId is required for planned AFEs.");
+    const afp = await prisma.afp_lines.findFirst({ where: { id: afpLineId, programId } });
+    if (!afp) throw new AppError(404, "NOT_FOUND", "AFP line not found.");
+  } else if (afpLineId) {
+    const afp = await prisma.afp_lines.findFirst({ where: { id: afpLineId, programId } });
+    if (!afp) throw new AppError(404, "NOT_FOUND", "AFP line not found.");
+  }
+
+  let origin = dto.origin || "spx_initiated";
+  if (isVendorRole(user.role)) origin = "vendor_request";
+
   const thresholds = await getThresholds(programId);
   const band = computeBand(dto.estimatedCostUsd, thresholds);
   const silvaApprovalRequired = band === "C" || band === "D";
@@ -58,12 +71,14 @@ exports.create = async (dto, user) => {
   const afe = await prisma.afes.create({
     data: programCreateData(user, {
       id,
-      afpLineId: dto.afpLineId,
+      afpLineId,
       operatingDiscipline: dto.operatingDiscipline,
       description: dto.description,
       estimatedCostUsd: decimal(dto.estimatedCostUsd),
       band,
       silvaApprovalRequired,
+      planningMode,
+      origin,
       createdByUserId: user.id,
     }),
   });

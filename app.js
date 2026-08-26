@@ -45,6 +45,7 @@ const workPlanRoutes = require("./routes/workPlan.routes");
 const farmEstateRoutes = require("./routes/farmEstate.routes");
 const registrationRequestRoutes = require("./routes/registrationRequest.routes");
 const contactRoutes = require("./routes/contact.routes");
+const activityRequestRoutes = require("./routes/activityRequest.routes");
 const setProgramRls = require("./middleware/setProgramRls");
 
 const app = express();
@@ -89,6 +90,7 @@ const programScoped = [authenticateJWT, requireProgramAccess, setProgramRls];
 app.use("/api/v1/dashboard", ...programScoped, dashboardRoutes);
 app.use("/api/v1/afp-lines", ...programScoped, afpRoutes);
 app.use("/api/v1/afes", ...programScoped, afeRoutes);
+app.use("/api/v1/activity-requests", ...programScoped, activityRequestRoutes);
 app.use("/api/v1/work-orders", ...programScoped, workOrderRoutes);
 app.use("/api/v1/work-order-tasks", ...programScoped, taskRoutes);
 app.use("/api/v1/field-tickets", ...programScoped, fieldTicketRoutes);

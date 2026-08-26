@@ -70,11 +70,14 @@ function afpJson(row, actor) {
 function afeJson(row) {
   return {
     id: row.id,
-    afpLineId: row.afpLineId,
+    afpLineId: row.afpLineId ?? null,
     operatingDiscipline: row.operatingDiscipline,
     description: row.description,
     estimatedCostUsd: money(row.estimatedCostUsd),
     band: row.band,
+    planningMode: row.planningMode || "planned",
+    origin: row.origin || "spx_initiated",
+    activityRequestId: row.activityRequestId ?? null,
     spxValidated: row.spxValidated,
     silvaApprovalRequired: row.silvaApprovalRequired,
     silvaApproved: row.silvaApproved,
@@ -108,14 +111,16 @@ function workOrderJson(row, extra = {}) {
   };
 }
 
-function assignmentJson(row) {
+function assignmentJson(row, extra = {}) {
   return {
     id: row.id,
     workOrderId: row.workOrderId,
     userId: row.userId,
     roleOnOrder: row.roleOnOrder,
     isPrimary: row.isPrimary,
+    active: row.active !== false,
     createdAt: iso(row.createdAt),
+    ...extra,
   };
 }
 

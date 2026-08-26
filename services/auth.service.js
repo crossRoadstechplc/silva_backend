@@ -369,7 +369,10 @@ exports.revokeInvite = async (user, inviteId) => {
 exports.listUsers = async (user, query) => {
   const where = {};
   if (isVendorRole(user.role)) {
-    if (user.role !== "vendor_admin") throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
+    // Admin manages roster; manager needs read to assign field leads on WOs
+    if (!["vendor_admin", "vendor_manager"].includes(user.role)) {
+      throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
+    }
     where.vendorId = user.vendorId;
   } else if (!["spx_principal", "system_admin", "spx_account_handler"].includes(user.role)) {
     throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
