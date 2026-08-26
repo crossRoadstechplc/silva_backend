@@ -31,6 +31,15 @@ async function main() {
   await prisma.gl_journal_export_lines.deleteMany();
   await prisma.gl_journal_exports.deleteMany();
   await prisma.reports.deleteMany();
+  try {
+    await prisma.message_thread_reads.deleteMany();
+    await prisma.messages.deleteMany();
+    await prisma.message_threads.deleteMany();
+    await prisma.activity_requests.deleteMany();
+    await prisma.item_comments.deleteMany();
+  } catch {
+    /* tables may not exist before migration */
+  }
   await prisma.owner_settlements.deleteMany();
   await prisma.payment_requests.deleteMany();
   await prisma.field_tickets.deleteMany();
