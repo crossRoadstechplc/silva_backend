@@ -2,16 +2,24 @@ const prisma = require("../config/database");
 const AppError = require("../utils/AppError");
 const { uuid, nextTextId } = require("../utils/ids");
 const { decimal, parseListQuery, meta } = require("../utils/helpers");
-const { isSilvaRole, isSpxRole } = require("../utils/roles");
+const { isSilvaRole, isSpxRole, isVendorRole } = require("../utils/roles");
 const { scopedWhere, programCreateData, requireProgramId } = require("./utils/programScope");
 const computeBand = require("./utils/computeBand");
 const notify = require("./workflowNotifications.service");
 
 const DISCIPLINE_PREFIX = "Discipline: ";
 
+const VENDOR_ADHOC_ROLES = new Set([
+  "vendor_admin",
+  "vendor_manager",
+  "vendor_supervisor",
+  "vendor_field_lead",
+]);
+
 const include = {
   requestedBy: { select: { id: true, name: true, email: true } },
   farmEstate: { select: { id: true, name: true } },
+  vendor: { select: { id: true, name: true } },
   suggestedAfpLine: {
     select: { id: true, activity: true, operatingDiscipline: true, year: true, status: true },
   },
@@ -62,6 +70,7 @@ function requestJson(row) {
     suggestedAfpLineId: row.suggestedAfpLineId,
     status: row.status,
     origin: row.origin,
+    vendorId: row.vendorId || null,
     requestedByUserId: row.requestedByUserId,
     reviewedByUserId: null,
     reviewedAt: row.dismissedAt?.toISOString() || row.convertedAt?.toISOString() || null,
@@ -72,14 +81,19 @@ function requestJson(row) {
     updatedAt: row.updatedAt.toISOString(),
     requestedBy: row.requestedBy || undefined,
     farmEstate: row.farmEstate || undefined,
+    vendor: row.vendor || undefined,
     suggestedAfpLine: row.suggestedAfpLine || undefined,
     convertedAfe: row.convertedAfe || undefined,
   };
 }
 
-function assertSilva(user) {
-  if (!isSilvaRole(user.role)) {
-    throw new AppError(403, "FORBIDDEN", "Only asset owner (Silva) roles can submit ad-hoc requests.");
+function canSubmitAdHoc(user) {
+  return isSilvaRole(user.role) || (isVendorRole(user.role) && VENDOR_ADHOC_ROLES.has(user.role));
+}
+
+function assertCanSubmit(user) {
+  if (!canSubmitAdHoc(user)) {
+    throw new AppError(403, "FORBIDDEN", "Only asset owners or vendors can submit ad-hoc requests.");
   }
 }
 
@@ -89,9 +103,22 @@ function assertSpx(user) {
   }
 }
 
+function assertCanAccess(user) {
+  if (!isSilvaRole(user.role) && !isSpxRole(user.role) && !canSubmitAdHoc(user)) {
+    throw new AppError(403, "FORBIDDEN", "Ad-hoc requests are for Silva, vendors, and SPX.");
+  }
+}
+
 async function getScoped(id, user) {
+  const where = scopedWhere(user, { id });
+  if (isVendorRole(user.role)) {
+    where.origin = "vendor_request";
+    where.vendorId = user.vendorId || "__none__";
+  } else if (isSilvaRole(user.role)) {
+    where.origin = "silva_request";
+  }
   const row = await prisma.activity_requests.findFirst({
-    where: scopedWhere(user, { id }),
+    where,
     include,
   });
   if (!row) throw new AppError(404, "NOT_FOUND", "Ad-hoc request not found.");
@@ -116,11 +143,19 @@ function requestTypeFromUrgency(urgency) {
 
 exports.findAll = async (query, user) => {
   requireProgramId(user);
-  if (!isSilvaRole(user.role) && !isSpxRole(user.role)) {
-    throw new AppError(403, "FORBIDDEN", "Ad-hoc requests are for Silva and SPX.");
-  }
+  assertCanAccess(user);
   const { page, pageSize, skip, take } = parseListQuery(query);
-  const where = scopedWhere(user, { origin: "silva_request" });
+  const where = scopedWhere(user, {});
+
+  if (isVendorRole(user.role)) {
+    where.origin = "vendor_request";
+    where.vendorId = user.vendorId || "__none__";
+  } else if (isSilvaRole(user.role)) {
+    where.origin = "silva_request";
+  } else if (query.origin === "silva_request" || query.origin === "vendor_request") {
+    where.origin = query.origin;
+  }
+
   if (query.status) {
     if (query.status === "draft") {
       return { items: [], meta: meta(page, pageSize, 0) };
@@ -142,18 +177,28 @@ exports.findAll = async (query, user) => {
   return { items: rows.map(requestJson), meta: meta(page, pageSize, total) };
 };
 
-exports.findOne = async (id, user) => requestJson(await getScoped(id, user));
+exports.findOne = async (id, user) => {
+  assertCanAccess(user);
+  return requestJson(await getScoped(id, user));
+};
 
 exports.create = async (dto, user) => {
-  assertSilva(user);
+  assertCanSubmit(user);
   const programId = requireProgramId(user);
   const title = String(dto.title || "").trim();
   if (!title) throw new AppError(400, "VALIDATION_ERROR", "Title is required.");
 
+  const isVendor = isVendorRole(user.role);
+  if (isVendor && !user.vendorId) {
+    throw new AppError(400, "VALIDATION_ERROR", "Vendor profile is required to submit ad-hoc requests.");
+  }
+
   if (dto.farmEstateId) {
-    const estate = await prisma.farm_estates.findFirst({
-      where: { id: dto.farmEstateId, programId, status: "active" },
-    });
+    const estateWhere = { id: dto.farmEstateId, programId, status: "active" };
+    if (isVendor) {
+      estateWhere.vendorMaps = { some: { vendorId: user.vendorId } };
+    }
+    const estate = await prisma.farm_estates.findFirst({ where: estateWhere });
     if (!estate) throw new AppError(404, "NOT_FOUND", "Farm estate not found.");
   }
 
@@ -165,11 +210,12 @@ exports.create = async (dto, user) => {
       description: withDiscipline(dto.operatingDiscipline || "Agronomy", dto.description),
       urgency,
       requestType: requestTypeFromUrgency(dto.urgency),
-      origin: "silva_request",
+      origin: isVendor ? "vendor_request" : "silva_request",
       status: "submitted",
       farmEstateId: dto.farmEstateId || null,
       suggestedAfpLineId: null,
       requestedByUserId: user.id,
+      vendorId: isVendor ? user.vendorId : null,
     }),
     include,
   });
@@ -179,7 +225,7 @@ exports.create = async (dto, user) => {
 };
 
 exports.update = async (id, dto, user) => {
-  assertSilva(user);
+  assertCanSubmit(user);
   const row = await getScoped(id, user);
   if (row.requestedByUserId !== user.id) {
     throw new AppError(403, "FORBIDDEN", "Only the requester can edit this request.");
@@ -210,12 +256,11 @@ exports.update = async (id, dto, user) => {
 };
 
 exports.submit = async (id, user) => {
-  assertSilva(user);
+  assertCanSubmit(user);
   const row = await getScoped(id, user);
   if (row.requestedByUserId !== user.id) {
     throw new AppError(403, "FORBIDDEN", "Only the requester can submit this request.");
   }
-  // Existing table has no draft state — create already submits.
   return requestJson(row);
 };
 
@@ -242,7 +287,7 @@ exports.dismiss = async (id, notes, user) => {
 };
 
 /**
- * SPX converts Silva ad-hoc request → AFE (optionally linked to an AFP line).
+ * SPX converts Silva/vendor ad-hoc request → AFE (optionally linked to an AFP line).
  */
 exports.convertToAfe = async (id, dto, user) => {
   assertSpx(user);
@@ -272,6 +317,7 @@ exports.convertToAfe = async (id, dto, user) => {
   const band = computeBand(cost, thresholds);
   const silvaApprovalRequired = band === "C" || band === "D";
   const afeId = await nextTextId("afe", "AFE");
+  const afeOrigin = row.origin === "vendor_request" ? "vendor_request" : "silva_request";
 
   const result = await prisma.$transaction(async (tx) => {
     const afe = await tx.afes.create({
@@ -283,7 +329,7 @@ exports.convertToAfe = async (id, dto, user) => {
         estimatedCostUsd: decimal(cost),
         band,
         planningMode: "ad_hoc",
-        origin: "silva_request",
+        origin: afeOrigin,
         activityRequestId: id,
         silvaApprovalRequired,
         createdByUserId: user.id,
