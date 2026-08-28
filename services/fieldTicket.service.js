@@ -137,14 +137,43 @@ exports.update = async (id, dto, user) => {
 };
 
 exports.submit = async (id, user) => {
-  const row = await prisma.field_tickets.findUnique({ where: { id } });
+  const row = await prisma.field_tickets.findUnique({
+    where: { id },
+    include: { workOrder: true },
+  });
   if (!row) throw new AppError(404, "NOT_FOUND", "Field ticket not found.");
   if (row.status === "submitted") return fieldTicketJson(row);
   if (row.status !== "draft") throw new AppError(400, "INVALID_STATE", "Workflow transition not allowed.");
 
-  const validation = row.normValidationJson;
+  const catalog = row.activityCatalogId
+    ? await prisma.activity_catalog.findFirst({ where: { id: row.activityCatalogId } })
+    : await resolveCatalog({}, row.workOrder);
+
+  const validation =
+    row.ticketType === "payroll_confirmation"
+      ? normValidation.validatePayrollLine(catalog, {
+          actualMandays: row.actualMandays != null ? Number(row.actualMandays) : null,
+          actualCostEtb: row.actualCostEtb != null ? Number(row.actualCostEtb) : null,
+        })
+      : normValidation.validateAgainstCatalog(catalog, {
+          actualQuantity: row.actualQuantity != null ? Number(row.actualQuantity) : null,
+          actualMandays: row.actualMandays != null ? Number(row.actualMandays) : null,
+          actualCostEtb: row.actualCostEtb != null ? Number(row.actualCostEtb) : null,
+        });
+
   if (validation?.flags?.some((f) => f.blockPayment)) {
+    await prisma.field_tickets.update({
+      where: { id },
+      data: { normValidationJson: validation },
+    });
     throw new AppError(422, "NORM_VIOLATION", "Cost variance blocks submission. Adjust actuals or contact SPX.");
+  }
+
+  if (JSON.stringify(row.normValidationJson) !== JSON.stringify(validation)) {
+    await prisma.field_tickets.update({
+      where: { id },
+      data: { normValidationJson: validation },
+    });
   }
 
   return fieldTicketJson(

@@ -12,7 +12,7 @@ exports.listThreads = catchAsync(async (req, res) => {
 });
 
 exports.createThread = catchAsync(async (req, res) => {
-  const data = await messageService.createThread(req.validatedBody, req.user);
+  const data = await messageService.createThread(req.validatedBody || req.body, req.user);
   res.status(201).json({ data });
 });
 
@@ -22,7 +22,7 @@ exports.getThread = catchAsync(async (req, res) => {
 });
 
 exports.reply = catchAsync(async (req, res) => {
-  const data = await messageService.reply(req.params.threadId, req.validatedBody, req.user);
+  const data = await messageService.reply(req.params.threadId, req.validatedBody || req.body, req.user);
   res.status(201).json({ data });
 });
 
