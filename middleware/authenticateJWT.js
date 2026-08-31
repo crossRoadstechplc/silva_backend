@@ -17,6 +17,7 @@ function isPublic(req) {
   const path = req.path.replace(/^\/api\/v1/, "") || "/";
   if (PUBLIC.has(`${req.method} ${path}`)) return true;
   if (req.method === "POST" && /\/invites\/[^/]+\/accept$/.test(path)) return true;
+  if (req.method === "GET" && /\/invites\/[^/]+\/preview$/.test(path)) return true;
   if (path === "/health" || req.path === "/health") return true;
   if (req.path.startsWith("/api/docs")) return true;
   return false;
@@ -75,6 +76,7 @@ module.exports = async (req, res, next) => {
 
     req.user = {
       id: user.id,
+      name: user.name,
       email: user.email,
       role: user.role,
       organizationId: user.organizationId,

@@ -28,7 +28,6 @@ exports.promoteSubmission = async (submission, { createdByUserId, year }) => {
 
   const programId = submission.programId;
   const farmEstateId = submission.farmEstateId || null;
-  const fx = Number(submission.fxEtbPerUsd) || 130;
 
   const afpLineScheduleRows = [];
   const catalogRows = [];
@@ -49,7 +48,7 @@ exports.promoteSubmission = async (submission, { createdByUserId, year }) => {
         year,
         month: row.month,
         plannedCostEtb: dec(row.plannedCostEtb),
-        plannedCostUsd: dec(row.plannedCostUsd ?? row.plannedCostEtb / fx),
+        plannedCostUsd: dec(row.plannedCostEtb),
       });
     }
   }
@@ -112,7 +111,7 @@ exports.promoteSubmission = async (submission, { createdByUserId, year }) => {
 
     for (const cat of parsed.categories) {
       if (!cat.afpLineId || !cat.budgetEtb) continue;
-      const budgetUsd = cat.budgetUsd ?? Math.round((cat.budgetEtb / fx) * 100) / 100;
+      const budgetEtb = dec(cat.budgetEtb);
       await tx.afp_lines.upsert({
         where: { id: cat.afpLineId },
         create: {
@@ -121,23 +120,23 @@ exports.promoteSubmission = async (submission, { createdByUserId, year }) => {
           year,
           operatingDiscipline: cat.operatingDiscipline,
           activity: cat.activity,
-          budgetAllocatedUsd: dec(budgetUsd),
-          budgetAllocatedEtb: dec(cat.budgetEtb),
+          budgetAllocatedUsd: budgetEtb,
+          budgetAllocatedEtb: budgetEtb,
           kpiTarget: cat.kpiTarget || "Per B-Agro submitted plan",
           status: "draft",
           silvaApproved: false,
-          notes: `Promoted from work plan ${submission.id} · ${cat.budgetEtb.toLocaleString()} ETB @ ${fx} ETB/USD`,
+          notes: `Promoted from work plan ${submission.id} · ${cat.budgetEtb.toLocaleString()} ETB`,
           workPlanSubmissionId: submission.id,
           createdByUserId,
         },
         update: {
           operatingDiscipline: cat.operatingDiscipline,
           activity: cat.activity,
-          budgetAllocatedUsd: dec(budgetUsd),
-          budgetAllocatedEtb: dec(cat.budgetEtb),
+          budgetAllocatedUsd: budgetEtb,
+          budgetAllocatedEtb: budgetEtb,
           kpiTarget: cat.kpiTarget || "Per B-Agro submitted plan",
           workPlanSubmissionId: submission.id,
-          notes: `Promoted from work plan ${submission.id} · ${cat.budgetEtb.toLocaleString()} ETB @ ${fx} ETB/USD`,
+          notes: `Promoted from work plan ${submission.id} · ${cat.budgetEtb.toLocaleString()} ETB`,
         },
       });
     }
@@ -191,12 +190,10 @@ exports.getAfpLineSchedule = async (afpLineId, user) => {
   return {
     afpLineId,
     year: line.year,
-    budgetAllocatedEtb: line.budgetAllocatedEtb != null ? Number(line.budgetAllocatedEtb) : null,
-    budgetAllocatedUsd: Number(line.budgetAllocatedUsd),
+    budgetAllocatedEtb: Number(line.budgetAllocatedEtb ?? line.budgetAllocatedUsd),
     months: rows.map((r) => ({
       month: r.month,
-      plannedCostEtb: Number(r.plannedCostEtb),
-      plannedCostUsd: r.plannedCostUsd != null ? Number(r.plannedCostUsd) : null,
+      plannedCostEtb: Number(r.plannedCostEtb ?? r.plannedCostUsd ?? 0),
     })),
   };
 };

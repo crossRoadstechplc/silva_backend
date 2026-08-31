@@ -166,6 +166,13 @@ function isSpxRole(role) {
   return SPX_ROLES.includes(role);
 }
 
+const VENDOR_WORK_PLAN_ROLES = ["vendor_admin", "vendor_manager"];
+const WORK_PLAN_MANAGE_ROLES = [...SPX_ROLES, ...VENDOR_WORK_PLAN_ROLES];
+
+function canManageWorkPlan(role) {
+  return WORK_PLAN_MANAGE_ROLES.includes(role);
+}
+
 function orgTypeOf(user) {
   return user.organizationType || user.organization?.type || null;
 }
@@ -179,9 +186,12 @@ module.exports = {
   SPX_ROLES,
   SYSTEM_ROLES,
   VENDOR_ROLES,
+  VENDOR_WORK_PLAN_ROLES,
+  WORK_PLAN_MANAGE_ROLES,
   isVendorRole,
   isSilvaRole,
   isSpxRole,
+  canManageWorkPlan,
   orgTypeOf,
   permissionsFor,
 };

@@ -48,13 +48,13 @@ function inviteJson(inv) {
 }
 
 function afpJson(row, actor) {
+  const budgetEtb = row.budgetAllocatedEtb != null ? row.budgetAllocatedEtb : row.budgetAllocatedUsd;
   return {
     id: row.id,
     year: row.year,
     operatingDiscipline: row.operatingDiscipline,
     activity: row.activity,
-    budgetAllocatedUsd: actor && isVendorRole(actor.role) ? null : money(row.budgetAllocatedUsd),
-    budgetAllocatedEtb: actor && isVendorRole(actor.role) ? null : row.budgetAllocatedEtb != null ? money(row.budgetAllocatedEtb) : null,
+    budgetAllocatedEtb: actor && isVendorRole(actor.role) ? null : money(budgetEtb),
     kpiTarget: row.kpiTarget,
     status: row.status,
     silvaApproved: row.silvaApproved,
@@ -73,7 +73,7 @@ function afeJson(row) {
     afpLineId: row.afpLineId,
     operatingDiscipline: row.operatingDiscipline,
     description: row.description,
-    estimatedCostUsd: money(row.estimatedCostUsd),
+    estimatedCostEtb: money(row.estimatedCostUsd),
     band: row.band,
     planningMode: row.planningMode || "planned",
     spxValidated: row.spxValidated,
@@ -218,7 +218,7 @@ function contractJson(row) {
     id: row.id,
     vendorId: row.vendorId,
     afeId: row.afeId,
-    contractValueUsd: money(row.contractValueUsd),
+    contractValueEtb: money(row.contractValueUsd),
     procurementRoute: row.procurementRoute,
     tenderStatus: row.tenderStatus,
     contractStart: isoDate(row.contractStart),
@@ -247,8 +247,7 @@ function revenueJson(row) {
     period: row.period,
     tier: row.tier,
     feeDescription: row.feeDescription,
-    amountEtb: money(row.amountEtb),
-    amountUsd: money(row.amountUsd),
+    amountEtb: money(row.amountEtb != null && Number(row.amountEtb) ? row.amountEtb : row.amountUsd),
     invoiceDate: isoDate(row.invoiceDate),
     paymentStatus: row.paymentStatus,
   };

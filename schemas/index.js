@@ -118,7 +118,7 @@ const afpCreate = z.object({
   year: z.number().int(),
   operatingDiscipline: z.string().min(1),
   activity: z.string().min(1),
-  budgetAllocatedUsd: z.number().nonnegative(),
+  budgetAllocatedEtb: z.number().nonnegative(),
   kpiTarget: z.string().min(1),
   notes: z.string().nullable().optional(),
 });
@@ -126,7 +126,7 @@ const afeCreate = z.object({
   afpLineId: z.string().min(1),
   operatingDiscipline: z.string().min(1),
   description: z.string().min(1),
-  estimatedCostUsd: z.number().positive(),
+  estimatedCostEtb: z.number().positive(),
 });
 const coaCreate = z.object({
   sourceAccount: z.string().min(1),
@@ -140,7 +140,7 @@ const adHocRequestCreate = z.object({
   operatingDiscipline: z.string().min(1).optional(),
   operationKind: z.enum(["intervention", "project"]).optional(),
   urgency: z.enum(["low", "normal", "high", "emergency", "urgent"]).optional(),
-  estimatedCostUsd: z.number().positive().nullable().optional(),
+  estimatedCostEtb: z.number().positive().nullable().optional(),
   estimatedAmountEtb: z.number().positive().nullable().optional(),
   plannedStartDate: z.string().optional(),
   plannedEndDate: z.string().optional(),
@@ -156,7 +156,7 @@ const adHocRequestUpdate = z
     description: z.string().nullable().optional(),
     operatingDiscipline: z.string().min(1).optional(),
     urgency: z.enum(["low", "normal", "high", "emergency", "urgent"]).optional(),
-    estimatedCostUsd: z.number().positive().nullable().optional(),
+    estimatedCostEtb: z.number().positive().nullable().optional(),
     estimatedAmountEtb: z.number().positive().nullable().optional(),
     plannedStartDate: z.string().optional(),
     plannedEndDate: z.string().optional(),
@@ -182,7 +182,7 @@ const adHocRequestConvert = z.object({
     .transform((v) => (v && String(v).trim() ? String(v).trim() : null)),
   operatingDiscipline: z.string().min(1).optional(),
   description: z.string().min(1).optional(),
-  estimatedCostUsd: z.number().positive(),
+  estimatedCostEtb: z.number().positive(),
   notes: z.string().optional(),
 });
 
@@ -325,7 +325,7 @@ const vendorCreate = z.object({
 const contractCreate = z.object({
   vendorId: z.string().min(1),
   afeId: z.string().min(1),
-  contractValueUsd: z.number().positive(),
+  contractValueEtb: z.number().positive(),
   procurementRoute: z.enum(["sole_source", "competitive_tender"]),
   tenderStatus: z.enum(["n_a", "in_progress", "awarded"]).optional(),
   contractStart: z.string().min(1),
@@ -343,8 +343,7 @@ const revenueCreate = z.object({
   period: z.string().min(1),
   tier: z.enum(["retainer", "project", "special"]),
   feeDescription: z.string().min(1),
-  amountUsd: z.number(),
-  amountEtb: z.number().optional(),
+  amountEtb: z.number(),
   invoiceDate: z.string().min(1),
   paymentStatus: z.enum(["invoiced", "paid", "overdue"]).optional(),
 });

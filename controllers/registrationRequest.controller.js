@@ -1,8 +1,11 @@
 const catchAsync = require("../utils/catchAsync");
+const { resolveAppBaseUrl } = require("../utils/appBaseUrl");
 const registrationRequest = require("../services/registrationRequest.service");
 
 exports.submit = catchAsync(async (req, res) => {
-  const data = await registrationRequest.submit(req.validatedBody);
+  const data = await registrationRequest.submit(req.validatedBody, req.user, {
+    appBaseUrl: resolveAppBaseUrl(req),
+  });
   res.status(201).json({ data });
 });
 
@@ -22,12 +25,21 @@ exports.markUnderReview = catchAsync(async (req, res) => {
 });
 
 exports.approve = catchAsync(async (req, res) => {
-  const data = await registrationRequest.approve(req.params.id, req.user, req.validatedBody.notes);
+  const data = await registrationRequest.approve(req.params.id, req.user, req.validatedBody.notes, {
+    appBaseUrl: resolveAppBaseUrl(req),
+  });
   res.json({ data });
 });
 
 exports.reject = catchAsync(async (req, res) => {
   const data = await registrationRequest.reject(req.params.id, req.user, req.validatedBody.notes);
+  res.json({ data });
+});
+
+exports.resendActivation = catchAsync(async (req, res) => {
+  const data = await registrationRequest.resendActivation(req.params.id, req.user, {
+    appBaseUrl: resolveAppBaseUrl(req),
+  });
   res.json({ data });
 });
 

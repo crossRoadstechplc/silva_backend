@@ -2,6 +2,9 @@ const fs = require("fs");
 const path = require("path");
 const prisma = require("../config/database");
 const AppError = require("../utils/AppError");
+const { summarizeBvaRows } = require("../utils/reportBva");
+const { buildReportCsv, buildReportPdfLines } = require("../utils/reportExportFormat");
+const { structuredPdf } = require("../utils/structuredPdf");
 const platformService = require("./platform.service");
 
 const EXPORT_DIR = path.join(process.cwd(), "exports");
@@ -13,9 +16,17 @@ function ensureExportDir(sub) {
 }
 
 /** Minimal PDF bytes for a single-page text report (no external deps). */
-function simplePdf(lines) {
-  const text = lines.join("\n").replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
-  const content = `BT /F1 11 Tf 50 750 Td (${text.substring(0, 2000)}) Tj ET`;
+function simplePdf(lines, { fontSize = 10, lineHeight = 14, startX = 50, startY = 750 } = {}) {
+  const escaped = lines.map((line) =>
+    String(line ?? "")
+      .replace(/\\/g, "\\\\")
+      .replace(/\(/g, "\\(")
+      .replace(/\)/g, "\\)"),
+  );
+  const textOps = escaped
+    .map((line, i) => (i === 0 ? `(${line}) Tj` : `0 -${lineHeight} Td (${line}) Tj`))
+    .join("\n");
+  const content = `BT /F1 ${fontSize} Tf ${startX} ${startY} Td\n${textOps}\nET`;
   const objs = [
     "1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj",
     "2 0 obj<< /Type /Pages /Kids [3 0 R] /Count 1 >>endobj",
@@ -47,7 +58,7 @@ exports.generateAfpPdf = async (afpLineId, user) => {
     `Year: ${line.year}`,
     `Discipline: ${line.operatingDiscipline}`,
     `Activity: ${line.activity}`,
-    `Budget USD: ${line.budgetAllocatedUsd}`,
+    `Budget ETB: ${line.budgetAllocatedEtb ?? line.budgetAllocatedUsd}`,
     `KPI: ${line.kpiTarget}`,
     `Status: ${line.status}`,
     line.notes ? `Notes: ${line.notes}` : "",
@@ -70,7 +81,7 @@ exports.generateBoardPackPdf = async ({ period, type }, user) => {
     "",
     "Budget vs Actual summary:",
     ...bva.slice(0, 12).map(
-      (r) => `${r.activity}: budget ${r.budgetAllocatedUsd} committed ${r.committedUsd} actual ${r.actualUsd}`,
+      (r) => `${r.activity}: budget ${r.budgetAllocatedEtb} committed ${r.committedEtb} actual ${r.actualEtb}`,
     ),
   ];
   const buf = simplePdf(lines);
@@ -84,25 +95,21 @@ exports.generateReportPdf = async (reportId, user) => {
   const report = await platformService.findReport(reportId, user);
   const bvaSection = report.sections?.find((s) => s.key === "budget_vs_actual");
   const items = Array.isArray(bvaSection?.payload) ? bvaSection.payload : [];
-  const lines = [
-    "Coffee Field OS — Period Report",
-    `Type: ${report.type}`,
-    `Period: ${report.period}`,
-    `Status: ${report.status}`,
-    report.generatedAt ? `Generated: ${report.generatedAt}` : "",
-    report.releasedAt ? `Released: ${report.releasedAt}` : "",
-    "",
-    report.narrative ? `SPX narrative: ${report.narrative}` : "SPX narrative: (none)",
-    "",
-    "Budget vs actual:",
-    ...items.map(
-      (r) =>
-        `${r.activity}: budget $${r.budgetAllocatedUsd ?? "—"} committed $${r.committedUsd ?? "—"} actual $${r.actualUsd ?? "—"} ${r.utilizationPercent ?? 0}%`,
-    ),
-  ].filter(Boolean);
-  const buf = simplePdf(lines);
+  const summary = summarizeBvaRows(items);
+  const blocks = buildReportPdfLines(report, items, summary);
+  const buf = structuredPdf(blocks);
   const fileName = `report-${report.type}-${report.period}.pdf`.replace(/[^\w.-]+/g, "-");
   return { fileName, buffer: buf, contentType: "application/pdf" };
+};
+
+exports.generateReportCsv = async (reportId, user) => {
+  const report = await platformService.findReport(reportId, user);
+  const bvaSection = report.sections?.find((s) => s.key === "budget_vs_actual");
+  const items = Array.isArray(bvaSection?.payload) ? bvaSection.payload : [];
+  const summary = summarizeBvaRows(items);
+  const csv = buildReportCsv(report, items, summary);
+  const fileName = `report-${report.type}-${report.period}.csv`.replace(/[^\w.-]+/g, "-");
+  return { fileName, buffer: Buffer.from(`\uFEFF${csv}`, "utf8"), contentType: "text/csv;charset=utf-8" };
 };
 
 /** Silva GL file-drop export (CSV) for external accounting ingestion. */

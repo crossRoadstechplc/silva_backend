@@ -5,6 +5,7 @@ const AppError = require("../utils/AppError");
 const { uuid, nextTextId } = require("../utils/ids");
 const { decimal, money, parseListQuery, meta, isoDate } = require("../utils/helpers");
 const { revenueJson, reportJson, notificationJson, auditJson } = require("../utils/serializers");
+const { normalizeBvaPayload, sectionsFromRow } = require("../utils/reportBva");
 const { inboxRolesFor } = require("../utils/notificationRoles");
 const { isVendorRole, isSilvaRole, isSpxRole } = require("../utils/roles");
 const { signedUploadUrl, signedDownloadUrl } = require("../config/s3");
@@ -39,8 +40,7 @@ exports.createRevenue = async (dto, user) => {
       period: dto.period,
       tier: dto.tier,
       feeDescription: dto.feeDescription,
-      amountUsd: decimal(dto.amountUsd),
-      amountEtb: decimal(dto.amountEtb || 0),
+      amountEtb: decimal(dto.amountEtb ?? dto.amountUsd ?? 0),
       invoiceDate: new Date(`${dto.invoiceDate}T00:00:00.000Z`),
       paymentStatus: dto.paymentStatus || "invoiced",
     }),
@@ -67,8 +67,7 @@ exports.updateRevenue = async (id, dto, user) => {
     where: { id },
     data: {
       feeDescription: dto.feeDescription ?? row.feeDescription,
-      amountUsd: dto.amountUsd !== undefined ? decimal(dto.amountUsd) : undefined,
-      amountEtb: dto.amountEtb !== undefined ? decimal(dto.amountEtb) : undefined,
+      amountEtb: dto.amountEtb !== undefined ? decimal(dto.amountEtb) : dto.amountUsd !== undefined ? decimal(dto.amountUsd) : undefined,
       paymentStatus: dto.paymentStatus ?? row.paymentStatus,
     },
   });
@@ -98,37 +97,35 @@ exports.budgetVsActual = async (query, user) => {
     prisma.afp_lines.findMany({ where, skip, take, orderBy: { id: "asc" } }),
     prisma.afp_lines.count({ where }),
   ]);
-  const fx = await dashboard.fxRate(programId);
   const items = [];
   for (const line of lines) {
     const afes = await prisma.afes.findMany({
       where: { programId, afpLineId: line.id, status: { notIn: ["rejected"] } },
     });
-    const committedUsd = afes.reduce((s, a) => s + Number(a.estimatedCostUsd), 0);
+    const committedEtb = afes.reduce((s, a) => s + Number(a.estimatedCostUsd), 0);
     const wos = await prisma.work_orders.findMany({
       where: { programId, afeId: { in: afes.map((a) => a.id) } },
     });
     const settlements = await prisma.owner_settlements.findMany({
       where: { programId, workOrderId: { in: wos.map((w) => w.id) }, status: "settled" },
     });
-    const actualUsd = settlements.reduce((s, st) => s + Number(st.amountEtb) / fx, 0);
-    const utilizationPercent = Number(line.budgetAllocatedUsd)
-      ? Math.round((actualUsd / Number(line.budgetAllocatedUsd)) * 100)
-      : 0;
+    const actualEtb = settlements.reduce((s, st) => s + Number(st.amountEtb), 0);
+    const budgetEtb = Number(line.budgetAllocatedEtb ?? line.budgetAllocatedUsd);
+    const utilizationPercent = budgetEtb ? Math.round((actualEtb / budgetEtb) * 100) : 0;
     const schedules = await prisma.afp_line_schedules.findMany({
       where: { programId, afpLineId: line.id, year: line.year },
     });
-    const plannedUsd = schedules.reduce((s, r) => s + Number(r.plannedCostUsd || r.plannedCostEtb) / fx, 0);
-    const plannedEtb = schedules.reduce((s, r) => s + Number(r.plannedCostEtb), 0);
+    const plannedEtb = schedules.reduce(
+      (s, r) => s + Number(r.plannedCostEtb ?? r.plannedCostUsd ?? 0),
+      0,
+    );
     items.push({
       afpLineId: line.id,
       activity: line.activity,
-      budgetAllocatedUsd: money(line.budgetAllocatedUsd),
-      budgetAllocatedEtb: line.budgetAllocatedEtb != null ? money(line.budgetAllocatedEtb) : null,
-      plannedUsd: money(plannedUsd || Number(line.budgetAllocatedEtb || 0) / fx),
-      plannedEtb: money(plannedEtb || Number(line.budgetAllocatedEtb || 0)),
-      committedUsd: money(committedUsd),
-      actualUsd: money(actualUsd),
+      budgetAllocatedEtb: money(budgetEtb),
+      plannedEtb: money(plannedEtb || budgetEtb),
+      committedEtb: money(committedEtb),
+      actualEtb: money(actualEtb),
       utilizationPercent,
       health: dashboard.utilizationHealth(utilizationPercent),
     });
@@ -140,25 +137,17 @@ exports.budgetSummary = async (query, user) => {
   if (isVendorRole(user.role)) throw new AppError(403, "FORBIDDEN", "Vendors cannot access budget vs actual.");
   const year = Number(query.year) || new Date().getUTCFullYear();
   const { items } = await exports.budgetVsActual({ year, pageSize: 100 }, user);
-  const fx = await dashboard.fxRate(requireProgramId(user));
   return {
     year,
-    totalBudgetUsd: money(items.reduce((s, i) => s + i.budgetAllocatedUsd, 0)),
-    totalActualUsd: money(items.reduce((s, i) => s + i.actualUsd, 0)),
+    totalBudgetEtb: money(items.reduce((s, i) => s + i.budgetAllocatedEtb, 0)),
+    totalActualEtb: money(items.reduce((s, i) => s + i.actualEtb, 0)),
     watchCount: items.filter((i) => i.health === "watch").length,
     overBudgetCount: items.filter((i) => i.health === "over_budget").length,
-    fxRateEtbPerUsd: fx,
   };
 };
 
-exports.patchBudgetConfig = async (dto, user) => {
+exports.patchBudgetConfig = async (_dto, user) => {
   if (user.role !== "spx_principal") throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
-  const programId = requireProgramId(user);
-  await prisma.platform_config.upsert({
-    where: { programId },
-    create: { programId, fxRateEtbPerUsd: decimal(dto.fxRateEtbPerUsd), enhancedGovernanceActive: true },
-    update: { fxRateEtbPerUsd: decimal(dto.fxRateEtbPerUsd) },
-  });
   return exports.budgetSummary({ year: new Date().getUTCFullYear() }, user);
 };
 
@@ -177,7 +166,10 @@ exports.listReports = async (query, user) => {
     prisma.reports.findMany({ where, skip, take, orderBy: { generatedAt: "desc" } }),
     prisma.reports.count({ where }),
   ]);
-  return { items: rows.map((r) => reportJson(r)), meta: meta(page, pageSize, total) };
+  return {
+    items: rows.map((r) => reportJson(r, { sections: sectionsFromRow(r) })),
+    meta: meta(page, pageSize, total),
+  };
 };
 
 exports.generateReport = async (type, dto, user) => {
@@ -191,17 +183,18 @@ exports.generateReport = async (type, dto, user) => {
   }
   const period = dto.period || dto.periodStart || new Date().toISOString().slice(0, 7);
   const { items } = await exports.budgetVsActual({ year: Number(String(period).slice(0, 4)), pageSize: 100 }, user);
+  const bvaItems = normalizeBvaPayload(items);
   const row = await prisma.reports.create({
     data: programCreateData(user, {
       id: `rpt_${String(period).replace(/-/g, "_")}_${type}`,
       type,
       period: String(period),
       status: "draft",
-      sections: { budget_vs_actual: items },
+      sections: { budget_vs_actual: bvaItems },
     }),
   });
   await notify.reportGenerated(row);
-  return reportJson(row);
+  return reportJson(row, { sections: sectionsFromRow(row) });
 };
 
 exports.findReport = async (id, user) => {
@@ -211,14 +204,22 @@ exports.findReport = async (id, user) => {
     throw new AppError(404, "NOT_FOUND", "Report not found.");
   }
   if (isVendorRole(user.role)) throw new AppError(403, "FORBIDDEN", "Vendors cannot access reports.");
-  const sections = row.sections
-    ? Object.entries(row.sections).map(([key, payload]) => ({
-        key,
-        title: key.replace(/_/g, " "),
-        payload,
-      }))
-    : [];
-  return reportJson(row, { sections });
+
+  let reportRow = row;
+  if (row.status === "draft" && isSpxRole(user.role)) {
+    const year = Number(String(row.period).slice(0, 4));
+    const { items } = await exports.budgetVsActual({ year, pageSize: 100 }, user);
+    const bvaItems = normalizeBvaPayload(items);
+    reportRow = await prisma.reports.update({
+      where: { id: row.id },
+      data: {
+        sections: { ...(row.sections || {}), budget_vs_actual: bvaItems },
+        generatedAt: new Date(),
+      },
+    });
+  }
+
+  return reportJson(reportRow, { sections: sectionsFromRow(reportRow) });
 };
 
 exports.patchNarrative = async (id, narrative, user) => {
@@ -235,16 +236,25 @@ exports.releaseReport = async (id, user) => {
   }
   const row = await prisma.reports.findFirst({ where: scopedWhere(user, { id }) });
   if (!row) throw new AppError(404, "NOT_FOUND", "Report not found.");
-  if (row.status === "released") return reportJson(row);
+  if (row.status === "released") return reportJson(row, { sections: sectionsFromRow(row) });
   if (!row.narrative) {
     throw new AppError(422, "BUSINESS_RULE_VIOLATION", "Cannot release a report with empty narrative.");
   }
+  const year = Number(String(row.period).slice(0, 4));
+  const { items } = await exports.budgetVsActual({ year, pageSize: 100 }, user);
+  const bvaItems = normalizeBvaPayload(items);
   const updated = await prisma.reports.update({
     where: { id },
-    data: { status: "released", visibleToSilva: true, releasedAt: new Date(), releasedByUserId: user.id },
+    data: {
+      status: "released",
+      visibleToSilva: true,
+      releasedAt: new Date(),
+      releasedByUserId: user.id,
+      sections: { ...(row.sections || {}), budget_vs_actual: bvaItems },
+    },
   });
   await notify.reportReleased(updated);
-  return reportJson(updated);
+  return reportJson(updated, { sections: sectionsFromRow(updated) });
 };
 
 exports.listCoa = async (user) => {
@@ -423,8 +433,8 @@ exports.listSchedule3 = async (user) => {
   });
   return rows.map((r) => ({
     band: r.band,
-    minValueUsd: Number(r.minValueUsd),
-    maxValueUsd: r.maxValueUsd === null ? null : Number(r.maxValueUsd),
+    minValueEtb: Number(r.minValueUsd),
+    maxValueEtb: r.maxValueUsd === null ? null : Number(r.maxValueUsd),
     spxAuthority: r.spxAuthority,
     silvaAuthority: r.silvaAuthority,
     effectiveYear: r.effectiveYear,
@@ -440,11 +450,13 @@ exports.patchSchedule3 = async (band, dto, user) => {
     where: { programId_band: { programId, band } },
   });
   if (!existing) throw new AppError(404, "NOT_FOUND", "Band not found.");
+  const minEtb = dto.minValueEtb ?? dto.minValueUsd;
+  const maxEtb = dto.maxValueEtb !== undefined ? dto.maxValueEtb : dto.maxValueUsd;
   const updated = await prisma.schedule3_thresholds.update({
     where: { programId_band: { programId, band } },
     data: {
-      minValueUsd: dto.minValueUsd !== undefined ? decimal(dto.minValueUsd) : undefined,
-      maxValueUsd: dto.maxValueUsd === undefined ? undefined : dto.maxValueUsd === null ? null : decimal(dto.maxValueUsd),
+      minValueUsd: minEtb !== undefined ? decimal(minEtb) : undefined,
+      maxValueUsd: maxEtb === undefined ? undefined : maxEtb === null ? null : decimal(maxEtb),
       spxAuthority: dto.spxAuthority ?? existing.spxAuthority,
       silvaAuthority: dto.silvaAuthority ?? existing.silvaAuthority,
       effectiveYear: dto.effectiveYear ?? existing.effectiveYear,
@@ -452,8 +464,8 @@ exports.patchSchedule3 = async (band, dto, user) => {
   });
   return {
     band: updated.band,
-    minValueUsd: Number(updated.minValueUsd),
-    maxValueUsd: updated.maxValueUsd === null ? null : Number(updated.maxValueUsd),
+    minValueEtb: Number(updated.minValueUsd),
+    maxValueEtb: updated.maxValueUsd === null ? null : Number(updated.maxValueUsd),
     spxAuthority: updated.spxAuthority,
     silvaAuthority: updated.silvaAuthority,
     effectiveYear: updated.effectiveYear,
@@ -466,7 +478,7 @@ exports.listSchedule4 = async (user) => {
     id: r.id,
     party: r.party,
     coverageType: r.coverageType,
-    minimumCoverageUsd: Number(r.minimumCoverageUsd),
+    minimumCoverageEtb: Number(r.minimumCoverageUsd),
     beneficiary: r.beneficiary,
   }));
 };

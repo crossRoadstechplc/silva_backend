@@ -30,6 +30,17 @@ router.post(
 );
 
 router.get(
+  "/reports/:reportId/csv",
+  requireRole([...SPX, ...SILVA_REPORT]),
+  catchAsync(async (req, res) => {
+    const out = await exportService.generateReportCsv(req.params.reportId, req.user);
+    res.setHeader("Content-Type", out.contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${out.fileName}"`);
+    res.send(out.buffer);
+  }),
+);
+
+router.get(
   "/reports/:reportId/pdf",
   requireRole([...SPX, ...SILVA_REPORT]),
   catchAsync(async (req, res) => {

@@ -34,7 +34,7 @@ async function silvaOwnerPayload(year, programId, farmEstateId = null) {
     return {
       id: a.id,
       band: a.band,
-      estimatedCostUsd: money(a.estimatedCostUsd),
+      estimatedCostEtb: money(a.estimatedCostUsd),
       daysOutstanding: days,
       health: days > 5 ? "overdue" : "watch",
     };
@@ -43,9 +43,8 @@ async function silvaOwnerPayload(year, programId, farmEstateId = null) {
   for (const line of afps) {
     const related = await prisma.afes.findMany({ where: { afpLineId: line.id } });
     const committed = related.reduce((s, a) => s + Number(a.estimatedCostUsd), 0);
-    const percent = Number(line.budgetAllocatedUsd)
-      ? Math.round((committed / Number(line.budgetAllocatedUsd)) * 100)
-      : 0;
+    const budgetEtb = Number(line.budgetAllocatedEtb ?? line.budgetAllocatedUsd);
+    const percent = budgetEtb ? Math.round((committed / budgetEtb) * 100) : 0;
     bva.push({
       afpLineId: line.id,
       activity: line.activity,
@@ -204,7 +203,6 @@ async function fieldTicketCountForEstate(programId, farmEstateId, extraWhere = {
 async function buildExceptions(programId, farmEstateId = null) {
   const exceptions = [];
   const year = new Date().getUTCFullYear();
-  const fx = await fxRate(programId);
   const lines = await prisma.afp_lines.findMany({ where: { year, programId } });
   for (const line of lines) {
     const afes = await prisma.afes.findMany({ where: { afpLineId: line.id, status: { notIn: ["rejected"] } } });
@@ -212,10 +210,9 @@ async function buildExceptions(programId, farmEstateId = null) {
     const settlements = await prisma.owner_settlements.findMany({
       where: { workOrderId: { in: wos.map((w) => w.id) }, status: "settled" },
     });
-    const actualUsd = settlements.reduce((s, st) => s + Number(st.amountEtb) / fx, 0);
-    const percent = Number(line.budgetAllocatedUsd)
-      ? Math.round((actualUsd / Number(line.budgetAllocatedUsd)) * 100)
-      : 0;
+    const actualEtb = settlements.reduce((s, st) => s + Number(st.amountEtb), 0);
+    const budgetEtb = Number(line.budgetAllocatedEtb ?? line.budgetAllocatedUsd);
+    const percent = budgetEtb ? Math.round((actualEtb / budgetEtb) * 100) : 0;
     const health = utilizationHealth(percent);
     if (health !== "on_track") {
       exceptions.push({
@@ -323,10 +320,18 @@ exports.spxManagement = async (user, query) => {
   if (user.role === "spx_principal") {
     const ledger = await prisma.spx_revenue_ledger.findMany({ where: { programId } });
     payload.revenueLedgerSummary = {
-      invoicedUsd: money(ledger.filter((l) => l.paymentStatus === "invoiced").reduce((s, l) => s + Number(l.amountUsd), 0)),
-      paidUsd: money(ledger.filter((l) => l.paymentStatus === "paid").reduce((s, l) => s + Number(l.amountUsd), 0)),
+      invoicedEtb: money(
+        ledger
+          .filter((l) => l.paymentStatus === "invoiced")
+          .reduce((s, l) => s + Number(l.amountEtb || l.amountUsd), 0),
+      ),
+      paidEtb: money(
+        ledger
+          .filter((l) => l.paymentStatus === "paid")
+          .reduce((s, l) => s + Number(l.amountEtb || l.amountUsd), 0),
+      ),
       overdueCount: ledger.filter((l) => l.paymentStatus === "overdue").length,
-      yearToDateUsd: money(ledger.reduce((s, l) => s + Number(l.amountUsd), 0)),
+      yearToDateEtb: money(ledger.reduce((s, l) => s + Number(l.amountEtb || l.amountUsd), 0)),
     };
   }
   return payload;
@@ -413,7 +418,7 @@ exports.actionQueues = async (user, query = {}) => {
     }
   }
 
-  if (isVendorRole(user.role) && user.role === "vendor_admin") {
+  if (isVendorRole(user.role) && (user.role === "vendor_admin" || user.role === "vendor_manager")) {
     const draftPlanWhere = { programId, vendorId: user.vendorId, status: { in: ["draft", "revision_requested"] } };
     if (farmEstateId) draftPlanWhere.farmEstateId = farmEstateId;
     const draftPlans = await prisma.work_plan_submissions.findMany({

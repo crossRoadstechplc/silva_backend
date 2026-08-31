@@ -3,8 +3,6 @@ const path = require("path");
 const XLSX = require("xlsx");
 const AppError = require("../utils/AppError");
 
-const DEFAULT_FX = 130;
-
 const CATEGORY_DEFS = [
   { afpLineId: "AFP-2026-001", discipline: "Agronomic Operations", activity: "Nursery program — 60,000 seedlings", kpi: "Seedling survival ≥85%" },
   { afpLineId: "AFP-2026-002", discipline: "Agronomic Operations", activity: "Young coffee care — Blocks A–G", kpi: "Cover crop compliance 100%" },
@@ -27,10 +25,6 @@ function num(v) {
 
 function round2(n) {
   return Math.round(n * 100) / 100;
-}
-
-function etbToUsd(etb, fx) {
-  return round2(etb / fx);
 }
 
 function loadReferencePlan() {
@@ -101,7 +95,7 @@ function inferSectionFromSheetName(name) {
   return best;
 }
 
-function categoriesFromSections(sections, fx) {
+function categoriesFromSections(sections) {
   return CATEGORY_DEFS.map((def) => {
     const matching = sections.filter((s) => s.afpLineId === def.afpLineId);
     const budgetEtb = matching.reduce(
@@ -114,14 +108,13 @@ function categoriesFromSections(sections, fx) {
       activity: def.activity,
       kpiTarget: def.kpi,
       budgetEtb: round2(budgetEtb),
-      budgetUsd: etbToUsd(budgetEtb, fx),
       monthlySchedule: [],
     };
   }).filter((c) => c.budgetEtb > 0);
 }
 
 /** Merge a newly parsed upload into an existing plan, replacing only overlapping sections. */
-exports.mergeParsedUpload = (existing, incoming, fx = DEFAULT_FX) => {
+exports.mergeParsedUpload = (existing, incoming) => {
   const prev = existing && typeof existing === "object" ? existing : {};
   const byCode = new Map((prev.sections || []).map((s) => [s.sectionCode, s]));
   for (const s of incoming.sections || []) {
@@ -132,14 +125,13 @@ exports.mergeParsedUpload = (existing, incoming, fx = DEFAULT_FX) => {
     incoming.sections?.some((s) => s.sectionCode === "salary")
       ? incoming.salaryLines || []
       : prev.salaryLines || incoming.salaryLines || [];
-  const categories = categoriesFromSections(sections, fx);
+  const categories = categoriesFromSections(sections);
   return reconcileTotals({
     source: incoming.source || "Excel upload",
     inputMethod: "excel",
     matchedSheets: incoming.matchedSheets || [],
     workbookSheets: incoming.workbookSheets || [],
     selectedSectionCode: incoming.selectedSectionCode || null,
-    fxEtbPerUsd: fx,
     categories,
     sections,
     salaryLines,
@@ -547,7 +539,7 @@ function parseActivityMatrix(sheet, sectionMeta) {
   };
 }
 
-function buildDefaultParsed(fx = DEFAULT_FX) {
+function buildDefaultParsed() {
   const ref = loadReferencePlan();
   const categories = CATEGORY_DEFS.map((c) => ({
     afpLineId: c.afpLineId,
@@ -555,7 +547,6 @@ function buildDefaultParsed(fx = DEFAULT_FX) {
     activity: c.activity,
     kpiTarget: c.kpi,
     budgetEtb: 0,
-    budgetUsd: 0,
     monthlySchedule: BUDGET_MONTHS.map((month) => ({ month, plannedCostEtb: 0 })),
   }));
 
@@ -587,7 +578,6 @@ function buildDefaultParsed(fx = DEFAULT_FX) {
     if (!cat) continue;
     const sectionTotal = section.activities.reduce((s, a) => s + (a.annualCostEtb || 0), 0);
     cat.budgetEtb = round2(sectionTotal);
-    cat.budgetUsd = etbToUsd(cat.budgetEtb, fx);
   }
 
   const salaryLines = [
@@ -607,7 +597,6 @@ function buildDefaultParsed(fx = DEFAULT_FX) {
   const salaryCat = categories.find((c) => c.afpLineId === "AFP-2026-010");
   if (salaryCat) {
     salaryCat.budgetEtb = salaryTotal;
-    salaryCat.budgetUsd = etbToUsd(salaryTotal, fx);
     salaryCat.monthlySchedule = BUDGET_MONTHS.map((month) => ({
       month,
       plannedCostEtb: round2(salaryTotal / 12),
@@ -638,7 +627,6 @@ function buildDefaultParsed(fx = DEFAULT_FX) {
 
   return {
     source: "Coffee Field OS work plan template",
-    fxEtbPerUsd: fx,
     categories,
     sections,
     salaryLines,
@@ -646,11 +634,10 @@ function buildDefaultParsed(fx = DEFAULT_FX) {
   };
 }
 
-function buildEmptyParsed(fx = DEFAULT_FX, meta = {}) {
+function buildEmptyParsed(meta = {}) {
   return {
     source: "Coffee Field OS form builder",
     inputMethod: "form",
-    fxEtbPerUsd: fx,
     farmEstateId: meta.farmEstateId || null,
     farmName: meta.farmName || null,
     totalAreaHa: meta.totalAreaHa ?? null,
@@ -667,7 +654,7 @@ function buildEmptyParsed(fx = DEFAULT_FX, meta = {}) {
   };
 }
 
-function parseSummarySheet(rows, fx) {
+function parseSummarySheet(rows) {
   const categories = [];
   for (const row of rows) {
     const label = String(row[0] || row["Cost Category"] || row.category || "").trim();
@@ -687,14 +674,13 @@ function parseSummarySheet(rows, fx) {
       activity: label || def?.activity,
       kpiTarget: def?.kpi || "Per submitted plan",
       budgetEtb: etb,
-      budgetUsd: etbToUsd(etb, fx),
       monthlySchedule: [],
     });
   }
   return categories;
 }
 
-function parseMonthlySheet(rows, categories, fx) {
+function parseMonthlySheet(rows, categories) {
   if (!rows.length) return categories;
   const header = rows[0];
   const monthCols = [];
@@ -725,7 +711,6 @@ function parseMonthlySheet(rows, categories, fx) {
       .map(({ idx, month }) => ({
         month,
         plannedCostEtb: num(row[idx]) || 0,
-        plannedCostUsd: etbToUsd(num(row[idx]) || 0, fx),
       }))
       .filter((m) => m.plannedCostEtb > 0);
   }
@@ -832,10 +817,9 @@ function reconcileTotals(parsed) {
   return parsed;
 }
 
-exports.parseJsonPayload = (payload, fx = DEFAULT_FX) => {
+exports.parseJsonPayload = (payload) => {
   const parsed = {
     source: payload.source || "JSON upload",
-    fxEtbPerUsd: payload.fxEtbPerUsd || fx,
     categories: payload.categories || [],
     sections: payload.sections || [],
     salaryLines: payload.salaryLines || [],
@@ -853,7 +837,6 @@ exports.parseJsonPayload = (payload, fx = DEFAULT_FX) => {
         activity: def.activity,
         kpiTarget: def.kpi,
         budgetEtb: round2(budgetEtb),
-        budgetUsd: etbToUsd(budgetEtb, parsed.fxEtbPerUsd),
         monthlySchedule: [],
       };
     }).filter((c) => c.budgetEtb > 0);
@@ -861,7 +844,7 @@ exports.parseJsonPayload = (payload, fx = DEFAULT_FX) => {
   return reconcileTotals(parsed);
 };
 
-exports.parseExcelBuffer = (buffer, fx = DEFAULT_FX, options = {}) => {
+exports.parseExcelBuffer = (buffer, _fx, options = {}) => {
   const selectedSectionCode = options.sectionCode ? String(options.sectionCode).trim() : null;
   if (selectedSectionCode && !sectionMetaByCode(selectedSectionCode)) {
     throw new AppError(
@@ -887,14 +870,14 @@ exports.parseExcelBuffer = (buffer, fx = DEFAULT_FX, options = {}) => {
     const summaryHit = findSheet(wb, ["summary", "cost summary", "overview"]);
     if (summaryHit) {
       const rows = XLSX.utils.sheet_to_json(summaryHit.sheet, { header: 1, defval: "" });
-      categories = parseSummarySheet(rows, fx);
+      categories = parseSummarySheet(rows);
       matchedSheetNames.push(summaryHit.name);
     }
 
     const monthlyHit = findSheet(wb, ["monthly", "month schedule"]);
     if (monthlyHit && categories.length) {
       const rows = XLSX.utils.sheet_to_json(monthlyHit.sheet, { header: 1, defval: "" });
-      categories = parseMonthlySheet(rows, categories, fx);
+      categories = parseMonthlySheet(rows, categories);
       matchedSheetNames.push(monthlyHit.name);
     }
   }
@@ -1027,7 +1010,7 @@ exports.parseExcelBuffer = (buffer, fx = DEFAULT_FX, options = {}) => {
   }
 
   if (!categories.length && sections.length) {
-    categories = categoriesFromSections(sections, fx);
+    categories = categoriesFromSections(sections);
   }
 
   return reconcileTotals({
@@ -1036,7 +1019,6 @@ exports.parseExcelBuffer = (buffer, fx = DEFAULT_FX, options = {}) => {
     matchedSheets: [...new Set(matchedSheetNames)],
     workbookSheets: foundSheets,
     selectedSectionCode: selectedSectionCode || null,
-    fxEtbPerUsd: fx,
     categories,
     sections,
     salaryLines,

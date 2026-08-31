@@ -20,4 +20,17 @@ module.exports = {
   RATE_LIMIT_WINDOW_MS: Number(process.env.RATE_LIMIT_WINDOW_MS || 900000),
   RATE_LIMIT_MAX: Number(process.env.RATE_LIMIT_MAX || 20),
   CROPFORT_OTP_ON_LOGIN: process.env.CROPFORT_OTP_ON_LOGIN !== "false",
+  APP_BASE_URL: process.env.APP_BASE_URL || process.env.CLIENT_URL || "http://localhost:3000",
+  MAIL_FROM: process.env.MAIL_FROM || "CropFort <onboarding@cropfort.local>",
+  SMTP_HOST: process.env.SMTP_HOST || "",
+  SMTP_PORT: Number(process.env.SMTP_PORT || 587),
+  SMTP_SECURE: process.env.SMTP_SECURE === "true",
+  SMTP_USER: process.env.SMTP_USER || "",
+  SMTP_PASS: process.env.SMTP_PASS || "",
+  RESEND_API_KEY: process.env.RESEND_API_KEY || "",
+  MAIL_TEST_TO: process.env.MAIL_TEST_TO || "",
+  /** When true, all mail goes to MAIL_TEST_TO instead of the real recipient (dev only). */
+  MAIL_TEST_REDIRECT: process.env.MAIL_TEST_REDIRECT === "true",
+  /** auto (default) = Resend then SMTP; smtp = nodemailer only; resend = Resend API only */
+  MAIL_PROVIDER: (process.env.MAIL_PROVIDER || "auto").toLowerCase(),
 };

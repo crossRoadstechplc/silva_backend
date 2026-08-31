@@ -11,11 +11,17 @@ const SPX_ADMIN = ["system_admin", "spx_principal"];
 
 const router = express.Router();
 
-router.post("/", rateLimit, validate(schemas.registrationSubmit), registrationRequest.submit);
 router.post("/activate", rateLimit, validate(schemas.registrationActivate), registrationRequest.activate);
 router.get("/activation", rateLimit, registrationRequest.checkActivation);
 
 router.use(authenticateJWT);
+router.post(
+  "/",
+  requireRole(SPX_ADMIN),
+  validate(schemas.registrationSubmit),
+  auditLog("registration_request"),
+  registrationRequest.submit,
+);
 router.get("/", requireRole(SPX_ADMIN), registrationRequest.list);
 router.get("/:id", requireRole(SPX_ADMIN), registrationRequest.findOne);
 router.post(
@@ -38,6 +44,12 @@ router.post(
   validate(schemas.registrationReject),
   auditLog("registration_request"),
   registrationRequest.reject,
+);
+router.post(
+  "/:id/send-activation",
+  requireRole(SPX_ADMIN),
+  auditLog("registration_request"),
+  registrationRequest.resendActivation,
 );
 
 module.exports = router;

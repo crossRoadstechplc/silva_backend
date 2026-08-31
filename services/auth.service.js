@@ -9,6 +9,7 @@ const { isVendorRole, VENDOR_ROLES, SYSTEM_ROLES, permissionsFor } = require("..
 const { parseListQuery, meta } = require("../utils/helpers");
 const programService = require("./program.service");
 const authTotp = require("./auth.totp.service");
+const mail = require("./mail.service");
 
 function adminRoleForOrgType(type) {
   if (type === "silva") return "silva_owner";
@@ -313,7 +314,7 @@ exports.listMembers = async (user, organizationId, query) => {
   };
 };
 
-exports.createInvite = async (user, organizationId, dto) => {
+exports.createInvite = async (user, organizationId, dto, { appBaseUrl } = {}) => {
   const org = await prisma.organizations.findUnique({ where: { id: organizationId }, include: { vendor: true } });
   if (!org) throw new AppError(404, "NOT_FOUND", "Organization not found.");
   if (isVendorRole(user.role)) {
@@ -339,7 +340,29 @@ exports.createInvite = async (user, organizationId, dto) => {
       expiresAt: new Date(Date.now() + 14 * 24 * 3600 * 1000),
     },
   });
-  return inviteJson(invite);
+
+  const inviteUrl = mail.buildAbsoluteUrl(
+    `/accept-invite?inviteId=${encodeURIComponent(invite.id)}&token=${encodeURIComponent(token)}`,
+    appBaseUrl,
+  );
+  let emailDelivery = { sent: false, provider: "log" };
+  try {
+    const inviter = await prisma.users.findUnique({ where: { id: user.id } });
+    emailDelivery = await mail.sendOrganizationInviteEmail({
+      to: invite.email,
+      inviteeEmail: invite.email,
+      orgName: org.displayName || org.name,
+      role: invite.role,
+      invitedByName: inviter?.name || inviter?.email || "SPX Africa",
+      inviteUrl,
+      appBaseUrl,
+    });
+  } catch (err) {
+    console.error("[invite] email failed:", err.message);
+    emailDelivery = { sent: false, provider: "error", error: err.message };
+  }
+
+  return { ...inviteJson(invite), emailDelivery };
 };
 
 exports.listInvites = async (user, organizationId, query) => {
@@ -352,6 +375,27 @@ exports.listInvites = async (user, organizationId, query) => {
     prisma.invites.count({ where }),
   ]);
   return { items: rows.map(inviteJson), meta: meta(page, pageSize, total) };
+};
+
+exports.previewInvite = async (inviteId, token) => {
+  const invite = await prisma.invites.findUnique({
+    where: { id: inviteId },
+    include: { organization: true },
+  });
+  if (!invite) throw new AppError(404, "NOT_FOUND", "Invite not found.");
+  if (invite.status !== "pending") throw new AppError(409, "CONFLICT", "Invite is no longer pending.");
+  if (invite.expiresAt < new Date()) {
+    throw new AppError(409, "CONFLICT", "Invite has expired.");
+  }
+  if (!token || hashToken(token) !== invite.tokenHash) {
+    throw new AppError(401, "UNAUTHENTICATED", "Invalid invite token.");
+  }
+  return {
+    email: invite.email,
+    orgName: invite.organization?.displayName || invite.organization?.name || "Organization",
+    role: invite.role,
+    expiresAt: invite.expiresAt.toISOString(),
+  };
 };
 
 exports.acceptInvite = async (inviteId, dto) => {
@@ -387,8 +431,19 @@ exports.acceptInvite = async (inviteId, dto) => {
 exports.revokeInvite = async (user, inviteId) => {
   const invite = await prisma.invites.findUnique({ where: { id: inviteId } });
   if (!invite) throw new AppError(404, "NOT_FOUND", "Invite not found.");
-  if (isVendorRole(user.role) && user.organizationId !== invite.organizationId) {
-    throw new AppError(404, "NOT_FOUND", "Invite not found.");
+  if (invite.status !== "pending") {
+    throw new AppError(409, "CONFLICT", "Only pending invites can be revoked.");
+  }
+  if (isVendorRole(user.role)) {
+    if (user.role !== "vendor_admin" || user.organizationId !== invite.organizationId) {
+      throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
+    }
+  } else if (user.role === "spx_principal") {
+    if (user.organizationId !== invite.organizationId) {
+      throw new AppError(404, "NOT_FOUND", "Invite not found.");
+    }
+  } else if (user.role !== "system_admin") {
+    throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
   }
   const updated = await prisma.invites.update({ where: { id: inviteId }, data: { status: "revoked" } });
   return inviteJson(updated);
@@ -477,16 +532,30 @@ exports.changePassword = async (user, dto) => {
 };
 
 exports.setUserActive = async (user, userId, active) => {
+  if (user.id === userId) {
+    throw new AppError(422, "BUSINESS_RULE_VIOLATION", "You cannot change your own access.");
+  }
   const found = await prisma.users.findUnique({ where: { id: userId } });
   if (!found) throw new AppError(404, "NOT_FOUND", "User not found.");
-  if (user.role === "vendor_admin" && found.vendorId !== user.vendorId) {
-    throw new AppError(404, "NOT_FOUND", "User not found.");
+  if (isVendorRole(user.role)) {
+    if (user.role !== "vendor_admin" || found.vendorId !== user.vendorId) {
+      throw new AppError(404, "NOT_FOUND", "User not found.");
+    }
+  } else if (user.role === "spx_principal") {
+    if (found.organizationId !== user.organizationId) {
+      throw new AppError(404, "NOT_FOUND", "User not found.");
+    }
+  } else if (!["system_admin", "spx_account_handler"].includes(user.role)) {
+    throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
   }
   const updated = await prisma.users.update({
     where: { id: userId },
     data: { active },
     include: { organization: true },
   });
+  if (!active) {
+    await prisma.refresh_sessions.updateMany({ where: { userId }, data: { revoked: true } });
+  }
   return userJson(updated);
 };
 

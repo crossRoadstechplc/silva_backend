@@ -43,7 +43,7 @@ exports.create = async (dto, user) => {
       year: dto.year,
       operatingDiscipline: dto.operatingDiscipline,
       activity: dto.activity,
-      budgetAllocatedUsd: decimal(dto.budgetAllocatedUsd),
+      budgetAllocatedUsd: decimal(dto.budgetAllocatedEtb),
       kpiTarget: dto.kpiTarget,
       notes: dto.notes ?? null,
       createdByUserId: user.id,
@@ -60,7 +60,7 @@ exports.update = async (id, dto, user) => {
     data: {
       operatingDiscipline: dto.operatingDiscipline ?? row.operatingDiscipline,
       activity: dto.activity ?? row.activity,
-      budgetAllocatedUsd: dto.budgetAllocatedUsd !== undefined ? decimal(dto.budgetAllocatedUsd) : undefined,
+      budgetAllocatedUsd: dto.budgetAllocatedEtb !== undefined ? decimal(dto.budgetAllocatedEtb) : undefined,
       kpiTarget: dto.kpiTarget ?? row.kpiTarget,
       notes: dto.notes === undefined ? undefined : dto.notes,
       year: dto.year ?? row.year,

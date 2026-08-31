@@ -2,7 +2,7 @@ const prisma = require("../config/database");
 const AppError = require("../utils/AppError");
 const { uuid } = require("../utils/ids");
 const { decimal, parseListQuery, meta } = require("../utils/helpers");
-const { isVendorRole, isSpxRole } = require("../utils/roles");
+const { isVendorRole, isSpxRole, canManageWorkPlan } = require("../utils/roles");
 const { scopedWhere, programCreateData, requireProgramId } = require("./utils/programScope");
 const workPlanImport = require("./workPlanImport.service");
 const workPlanPromote = require("./workPlanPromote.service");
@@ -70,8 +70,8 @@ async function applyEstateToSubmission(dto, user, programId) {
   if (!dto.farmEstateId) {
     throw new AppError(400, "FARM_REQUIRED", "Select a farm estate for this work plan.");
   }
-  if (!isSpxRole(user.role)) {
-    throw new AppError(403, "FORBIDDEN", "Only SPX roles can manage work plan submissions.");
+  if (!canManageWorkPlan(user.role)) {
+    throw new AppError(403, "FORBIDDEN", "You do not have permission to manage work plan submissions.");
   }
 
   const estate = await prisma.farm_estates.findFirst({
@@ -84,7 +84,16 @@ async function applyEstateToSubmission(dto, user, programId) {
   if (!estate) throw new AppError(404, "NOT_FOUND", "Farm estate not found.");
 
   let vendorId = dto.vendorId || null;
-  if (vendorId) {
+  if (isVendorRole(user.role)) {
+    if (!user.vendorId) {
+      throw new AppError(403, "FORBIDDEN", "Your account is not linked to a vendor organization.");
+    }
+    const mapped = (estate.vendorMaps || []).find((m) => m.vendorId === user.vendorId);
+    if (!mapped) {
+      throw new AppError(403, "FORBIDDEN", "This farm estate is not assigned to your vendor organization.");
+    }
+    vendorId = user.vendorId;
+  } else if (vendorId) {
     const mapped = (estate.vendorMaps || []).find((m) => m.vendorId === vendorId);
     if (!mapped) {
       throw new AppError(400, "INVALID_VENDOR", "Selected vendor is not assigned to this farm estate.");
@@ -134,9 +143,15 @@ async function getScoped(id, user) {
   return row;
 }
 
-function assertSpxCanManageWorkPlan(user) {
-  if (!isSpxRole(user.role)) {
-    throw new AppError(403, "FORBIDDEN", "Only SPX roles can manage work plan submissions.");
+function assertCanManageWorkPlan(user) {
+  if (!canManageWorkPlan(user.role)) {
+    throw new AppError(403, "FORBIDDEN", "You do not have permission to manage work plan submissions.");
+  }
+}
+
+function assertVendorOwnsSubmission(user, row) {
+  if (isVendorRole(user.role) && row.vendorId !== user.vendorId) {
+    throw new AppError(403, "FORBIDDEN", "You can only edit your organization's work plans.");
   }
 }
 
@@ -173,7 +188,7 @@ exports.findAll = async (query, user) => {
 exports.findOne = async (id, user) => submissionJson(await getScoped(id, user));
 
 exports.create = async (dto, user) => {
-  assertSpxCanManageWorkPlan(user);
+  assertCanManageWorkPlan(user);
   const programId = requireProgramId(user);
   const fx = dto.fxEtbPerUsd || 130;
   const estateFields = await applyEstateToSubmission(dto, user, programId);
@@ -204,8 +219,9 @@ exports.create = async (dto, user) => {
 };
 
 exports.update = async (id, dto, user) => {
-  assertSpxCanManageWorkPlan(user);
+  assertCanManageWorkPlan(user);
   const row = await getScoped(id, user);
+  assertVendorOwnsSubmission(user, row);
   if (!["draft", "revision_requested"].includes(row.status)) {
     throw new AppError(400, "INVALID_STATE", "Only draft or revision-requested submissions can be edited.");
   }
@@ -247,8 +263,9 @@ exports.update = async (id, dto, user) => {
 };
 
 exports.updateParsed = async (id, parsedJson, user) => {
-  assertSpxCanManageWorkPlan(user);
+  assertCanManageWorkPlan(user);
   const row = await getScoped(id, user);
+  assertVendorOwnsSubmission(user, row);
   if (!["draft", "revision_requested"].includes(row.status)) {
     throw new AppError(400, "INVALID_STATE", "Only draft or revision-requested submissions can be edited.");
   }
@@ -262,8 +279,9 @@ exports.updateParsed = async (id, parsedJson, user) => {
 };
 
 exports.uploadExcel = async (id, buffer, user, options = {}) => {
-  assertSpxCanManageWorkPlan(user);
+  assertCanManageWorkPlan(user);
   const row = await getScoped(id, user);
+  assertVendorOwnsSubmission(user, row);
   if (!["draft", "revision_requested"].includes(row.status)) {
     throw new AppError(400, "INVALID_STATE", "Only draft submissions accept uploads.");
   }
@@ -287,8 +305,9 @@ exports.uploadExcel = async (id, buffer, user, options = {}) => {
 };
 
 exports.submit = async (id, user) => {
-  assertSpxCanManageWorkPlan(user);
+  assertCanManageWorkPlan(user);
   const row = await getScoped(id, user);
+  assertVendorOwnsSubmission(user, row);
   if (row.status === "submitted") return submissionJson(row);
   if (!["draft", "revision_requested"].includes(row.status)) {
     throw new AppError(400, "INVALID_STATE", "Submission cannot be submitted in current state.");

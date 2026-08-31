@@ -1,4 +1,5 @@
 const catchAsync = require("../utils/catchAsync");
+const { resolveAppBaseUrl } = require("../utils/appBaseUrl");
 const vendorService = require("../services/vendor.service");
 const dashboardService = require("../services/dashboard.service");
 const platformService = require("../services/platform.service");
@@ -32,7 +33,9 @@ exports.vendorUsers = catchAsync(async (req, res) => {
   res.json({ data: items, meta });
 });
 exports.vendorInvite = catchAsync(async (req, res) => {
-  const data = await vendorService.inviteUser(req.params.vendorId, req.validatedBody, req.user);
+  const data = await vendorService.inviteUser(req.params.vendorId, req.validatedBody, req.user, {
+    appBaseUrl: resolveAppBaseUrl(req),
+  });
   res.status(201).json({ data });
 });
 exports.listContracts = catchAsync(async (req, res) => {

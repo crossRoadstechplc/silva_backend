@@ -134,10 +134,10 @@ exports.listUsers = async (vendorId, user, query) => {
   });
 };
 
-exports.inviteUser = async (vendorId, dto, user) => {
+exports.inviteUser = async (vendorId, dto, user, { appBaseUrl } = {}) => {
   const vendor = await prisma.vendors.findUnique({ where: { id: vendorId } });
   if (!vendor) throw new AppError(404, "NOT_FOUND", "Vendor not found.");
-  return authService.createInvite(user, vendor.organizationId, dto);
+  return authService.createInvite(user, vendor.organizationId, dto, { appBaseUrl });
 };
 
 exports.listContracts = async (query, user) => {
@@ -161,15 +161,15 @@ exports.listContracts = async (query, user) => {
 exports.createContract = async (dto, user) => {
   const vendor = await prisma.vendors.findUnique({ where: { id: dto.vendorId } });
   if (!vendor) throw new AppError(404, "NOT_FOUND", "Vendor not found.");
-  if (Number(dto.contractValueUsd) > 10000 && dto.procurementRoute !== "competitive_tender" && !vendor.isDefaultExecutionPartner) {
-    throw new AppError(422, "BUSINESS_RULE_VIOLATION", "Contracts above 10000 USD require competitive tender.");
+  if (Number(dto.contractValueEtb) > 10000 && dto.procurementRoute !== "competitive_tender" && !vendor.isDefaultExecutionPartner) {
+    throw new AppError(422, "BUSINESS_RULE_VIOLATION", "Contracts above 10,000 ETB require competitive tender.");
   }
   const row = await prisma.vendor_contracts.create({
     data: {
       id: uuid("vct"),
       vendorId: dto.vendorId,
       afeId: dto.afeId,
-      contractValueUsd: decimal(dto.contractValueUsd),
+      contractValueUsd: decimal(dto.contractValueEtb),
       procurementRoute: dto.procurementRoute,
       tenderStatus: dto.tenderStatus || "n_a",
       contractStart: new Date(`${dto.contractStart}T00:00:00.000Z`),
@@ -195,7 +195,7 @@ exports.updateContract = async (id, dto, user) => {
   const updated = await prisma.vendor_contracts.update({
     where: { id },
     data: {
-      contractValueUsd: dto.contractValueUsd !== undefined ? decimal(dto.contractValueUsd) : undefined,
+      contractValueUsd: dto.contractValueEtb !== undefined ? decimal(dto.contractValueEtb) : undefined,
       procurementRoute: dto.procurementRoute ?? row.procurementRoute,
       tenderStatus: dto.tenderStatus ?? row.tenderStatus,
       contractStart: dto.contractStart ? new Date(`${dto.contractStart}T00:00:00.000Z`) : undefined,

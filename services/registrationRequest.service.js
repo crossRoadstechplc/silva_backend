@@ -8,17 +8,19 @@ const { decimal, parseListQuery, meta } = require("../utils/helpers");
 const programService = require("./program.service");
 const authService = require("./auth.service");
 const notify = require("./workflowNotifications.service");
+const mail = require("./mail.service");
 
 function adminRoleForOrgType(type) {
   if (type === "silva") return "silva_owner";
   return "vendor_admin";
 }
 
-function requestJson(row) {
+function requestJson(row, activationStatus) {
   return {
     id: row.id,
     orgType: row.orgType,
     status: row.status,
+    activationStatus,
     orgName: row.orgName,
     orgSlug: row.orgSlug,
     displayName: row.displayName,
@@ -52,6 +54,44 @@ function requestJson(row) {
   };
 }
 
+function activationStatusFor(row, userByEmail) {
+  if (row.status === "rejected") return "cancelled";
+  if (["submitted", "under_review"].includes(row.status)) return "draft";
+  if (row.status === "approved") {
+    const user = userByEmail.get(row.contactEmail.toLowerCase());
+    return user?.active ? "active" : "pending_activation";
+  }
+  return "draft";
+}
+
+async function userMapForRows(rows) {
+  const emails = [...new Set(rows.map((row) => row.contactEmail.toLowerCase()))];
+  if (!emails.length) return new Map();
+  const users = await prisma.users.findMany({
+    where: { email: { in: emails } },
+    select: { email: true, active: true },
+  });
+  return new Map(users.map((user) => [user.email.toLowerCase(), user]));
+}
+
+async function lifecycleWhere(lifecycle) {
+  if (!lifecycle || lifecycle === "all") return {};
+  if (lifecycle === "cancelled") return { status: "rejected" };
+  if (lifecycle === "draft") return { status: { in: ["submitted", "under_review"] } };
+
+  const users = await prisma.users.findMany({
+    where: { active: lifecycle === "active" },
+    select: { email: true },
+  });
+  const emails = users.map((user) => user.email.toLowerCase());
+  if (!emails.length) return { id: "__none__" };
+
+  return {
+    status: "approved",
+    contactEmail: { in: emails },
+  };
+}
+
 async function assertSlugAvailable(slug, excludeRequestId) {
   const orgTaken = await prisma.organizations.findUnique({ where: { slug } });
   if (orgTaken) throw new AppError(409, "CONFLICT", "Organization slug already taken.");
@@ -71,7 +111,26 @@ function assertReviewRole(user) {
   }
 }
 
-exports.submit = async (dto) => {
+async function deliverActivationEmail(row, activationPath, appBaseUrl) {
+  const activationUrl = mail.buildAbsoluteUrl(activationPath, appBaseUrl);
+  let emailDelivery = { sent: false, provider: "log" };
+  try {
+    emailDelivery = await mail.sendRegistrationActivationEmail({
+      to: row.contactEmail,
+      contactName: row.contactName,
+      orgName: row.orgName,
+      activationUrl,
+      appBaseUrl,
+    });
+  } catch (err) {
+    console.error("[registration] activation email failed:", err.message);
+    emailDelivery = { sent: false, provider: "error", error: err.message };
+  }
+  return { activationUrl, emailDelivery };
+}
+
+exports.submit = async (dto, user, { appBaseUrl } = {}) => {
+  assertReviewRole(user);
   if (!["silva", "vendor"].includes(dto.orgType)) {
     throw new AppError(400, "VALIDATION_ERROR", "Registration is only available for asset owners and vendors.");
   }
@@ -80,10 +139,10 @@ exports.submit = async (dto) => {
   if (existingUser) throw new AppError(409, "CONFLICT", "An account with this email already exists.");
 
   const pendingEmail = await prisma.registration_requests.findFirst({
-    where: { contactEmail: email, status: { in: ["submitted", "under_review"] } },
+    where: { contactEmail: email, status: { in: ["submitted", "under_review", "approved"] } },
   });
   if (pendingEmail) {
-    throw new AppError(409, "CONFLICT", "A registration application for this email is already under review.");
+    throw new AppError(409, "CONFLICT", "A registration for this email is already in progress.");
   }
 
   const slug = programService.slugify(dto.orgSlug || dto.orgName);
@@ -118,19 +177,13 @@ exports.submit = async (dto) => {
     },
   });
 
-  await notify.registrationSubmitted(row);
-
-  return {
-    id: row.id,
-    status: row.status,
-    message: "Application received. SPX will review your registration and contact you to activate your workspace.",
-  };
+  return exports.approve(row.id, user, null, { appBaseUrl });
 };
 
 exports.findAll = async (query, user) => {
   assertReviewRole(user);
   const { page, pageSize, skip, take } = parseListQuery(query);
-  const where = {};
+  const where = { ...(await lifecycleWhere(query.lifecycle)) };
   if (query.status) where.status = query.status;
   if (query.orgType) where.orgType = query.orgType;
   if (query.q) {
@@ -150,7 +203,11 @@ exports.findAll = async (query, user) => {
     }),
     prisma.registration_requests.count({ where }),
   ]);
-  return { items: rows.map(requestJson), meta: meta(page, pageSize, total) };
+  const userByEmail = await userMapForRows(rows);
+  return {
+    items: rows.map((row) => requestJson(row, activationStatusFor(row, userByEmail))),
+    meta: meta(page, pageSize, total),
+  };
 };
 
 exports.findOne = async (id, user) => {
@@ -160,8 +217,14 @@ exports.findOne = async (id, user) => {
     include: { reviewedBy: true, provisionedOrg: true },
   });
   if (!row) throw new AppError(404, "NOT_FOUND", "Registration request not found.");
-  return requestJson(row);
+  const userByEmail = await userMapForRows([row]);
+  return requestJson(row, activationStatusFor(row, userByEmail));
 };
+
+async function jsonRow(row) {
+  const userByEmail = await userMapForRows([row]);
+  return requestJson(row, activationStatusFor(row, userByEmail));
+}
 
 exports.markUnderReview = async (id, user, notes) => {
   assertReviewRole(user);
@@ -175,10 +238,10 @@ exports.markUnderReview = async (id, user, notes) => {
     data: { status: "under_review", reviewNotes: notes?.trim() || row.reviewNotes },
     include: { reviewedBy: true, provisionedOrg: true },
   });
-  return requestJson(updated);
+  return jsonRow(updated);
 };
 
-exports.approve = async (id, user, notes) => {
+exports.approve = async (id, user, notes, { appBaseUrl } = {}) => {
   assertReviewRole(user);
   const row = await prisma.registration_requests.findUnique({ where: { id } });
   if (!row) throw new AppError(404, "NOT_FOUND", "Registration request not found.");
@@ -262,10 +325,15 @@ exports.approve = async (id, user, notes) => {
     return { org, request: updated };
   });
 
+  const activationPath = `/activate?token=${activationToken}`;
+  const { activationUrl, emailDelivery } = await deliverActivationEmail(result.request, activationPath, appBaseUrl);
+
   return {
-    request: requestJson(result.request),
+    request: await jsonRow(result.request),
     activationToken,
-    activationPath: `/activate?token=${activationToken}`,
+    activationPath,
+    activationUrl,
+    emailDelivery,
   };
 };
 
@@ -287,7 +355,44 @@ exports.reject = async (id, user, notes) => {
     },
     include: { reviewedBy: true, provisionedOrg: true },
   });
-  return requestJson(updated);
+  return jsonRow(updated);
+};
+
+exports.resendActivation = async (id, user, { appBaseUrl } = {}) => {
+  assertReviewRole(user);
+  const row = await prisma.registration_requests.findUnique({ where: { id } });
+  if (!row) throw new AppError(404, "NOT_FOUND", "Registration request not found.");
+  if (row.status !== "approved") {
+    throw new AppError(400, "INVALID_STATE", "Only approved registrations can receive an activation link.");
+  }
+  if (!row.provisionedOrgId) {
+    throw new AppError(400, "INVALID_STATE", "Registration has not been provisioned.");
+  }
+
+  const existingUser = await prisma.users.findUnique({ where: { email: row.contactEmail.toLowerCase() } });
+  if (existingUser?.active) {
+    throw new AppError(409, "CONFLICT", "This account is already active. Direct them to sign in.");
+  }
+
+  const activationToken = rawToken();
+  const updated = await prisma.registration_requests.update({
+    where: { id },
+    data: {
+      activationTokenHash: hashToken(activationToken),
+      activationExpiresAt: new Date(Date.now() + 14 * 24 * 3600 * 1000),
+    },
+    include: { reviewedBy: true, provisionedOrg: true },
+  });
+
+  const activationPath = `/activate?token=${activationToken}`;
+  const { activationUrl, emailDelivery } = await deliverActivationEmail(updated, activationPath, appBaseUrl);
+
+  return {
+    request: await jsonRow(updated),
+    activationPath,
+    activationUrl,
+    emailDelivery,
+  };
 };
 
 exports.activate = async (dto) => {

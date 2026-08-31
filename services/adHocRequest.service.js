@@ -2,7 +2,7 @@ const prisma = require("../config/database");
 const AppError = require("../utils/AppError");
 const { uuid, nextTextId } = require("../utils/ids");
 const { decimal, parseListQuery, meta } = require("../utils/helpers");
-const { isSilvaRole, isSpxRole, isVendorRole } = require("../utils/roles");
+const { isSilvaRole, isSpxRole } = require("../utils/roles");
 const { scopedWhere, programCreateData, requireProgramId } = require("./utils/programScope");
 const computeBand = require("./utils/computeBand");
 const { computeCropfortAfeBand } = require("./costDerivation.service");
@@ -10,12 +10,15 @@ const notify = require("./workflowNotifications.service");
 
 const DISCIPLINE_PREFIX = "Discipline: ";
 
-const VENDOR_ADHOC_ROLES = new Set([
-  "vendor_admin",
-  "vendor_manager",
-  "vendor_supervisor",
-  "vendor_field_lead",
-]);
+function canSubmitAdHoc(user) {
+  return isSilvaRole(user.role) || isSpxRole(user.role);
+}
+
+function assertCanSubmit(user) {
+  if (!canSubmitAdHoc(user)) {
+    throw new AppError(403, "FORBIDDEN", "Only asset owners or SPX can submit core operation requests.");
+  }
+}
 
 const include = {
   requestedBy: { select: { id: true, name: true, email: true } },
@@ -146,16 +149,6 @@ async function getCropfortBands(programId) {
   });
 }
 
-function canSubmitAdHoc(user) {
-  return isSilvaRole(user.role) || (isVendorRole(user.role) && VENDOR_ADHOC_ROLES.has(user.role));
-}
-
-function assertCanSubmit(user) {
-  if (!canSubmitAdHoc(user)) {
-    throw new AppError(403, "FORBIDDEN", "Only asset owners or vendors can submit ad-hoc requests.");
-  }
-}
-
 function assertSpx(user) {
   if (!isSpxRole(user.role)) {
     throw new AppError(403, "FORBIDDEN", "Only SPX roles can triage ad-hoc requests.");
@@ -163,17 +156,14 @@ function assertSpx(user) {
 }
 
 function assertCanAccess(user) {
-  if (!isSilvaRole(user.role) && !isSpxRole(user.role) && !canSubmitAdHoc(user)) {
-    throw new AppError(403, "FORBIDDEN", "Ad-hoc requests are for Silva, vendors, and SPX.");
+  if (!isSilvaRole(user.role) && !isSpxRole(user.role)) {
+    throw new AppError(403, "FORBIDDEN", "Core operations are for asset owners and SPX only.");
   }
 }
 
 async function getScoped(id, user) {
   const where = scopedWhere(user, { id });
-  if (isVendorRole(user.role)) {
-    where.origin = "vendor_request";
-    where.vendorId = user.vendorId || "__none__";
-  } else if (isSilvaRole(user.role)) {
+  if (isSilvaRole(user.role)) {
     where.origin = "silva_request";
   }
   const row = await prisma.activity_requests.findFirst({
@@ -206,10 +196,7 @@ exports.findAll = async (query, user) => {
   const { page, pageSize, skip, take } = parseListQuery(query);
   const where = scopedWhere(user, {});
 
-  if (isVendorRole(user.role)) {
-    where.origin = "vendor_request";
-    where.vendorId = user.vendorId || "__none__";
-  } else if (isSilvaRole(user.role)) {
+  if (isSilvaRole(user.role)) {
     where.origin = "silva_request";
   } else if (query.origin === "silva_request" || query.origin === "vendor_request") {
     where.origin = query.origin;
@@ -273,17 +260,10 @@ exports.create = async (dto, user) => {
   const title = String(dto.title || "").trim();
   if (!title) throw new AppError(400, "VALIDATION_ERROR", "Title is required.");
 
-  const isVendor = isVendorRole(user.role);
-  if (isVendor && !user.vendorId) {
-    throw new AppError(400, "VALIDATION_ERROR", "Vendor profile is required to submit ad-hoc requests.");
-  }
-
   if (dto.farmEstateId) {
-    const estateWhere = { id: dto.farmEstateId, programId, status: "active" };
-    if (isVendor) {
-      estateWhere.vendorMaps = { some: { vendorId: user.vendorId } };
-    }
-    const estate = await prisma.farm_estates.findFirst({ where: estateWhere });
+    const estate = await prisma.farm_estates.findFirst({
+      where: { id: dto.farmEstateId, programId, status: "active" },
+    });
     if (!estate) throw new AppError(404, "NOT_FOUND", "Farm estate not found.");
   }
 
@@ -317,12 +297,12 @@ exports.create = async (dto, user) => {
       blockIds,
       activityIds,
       estimatedAmountEtb,
-      origin: isVendor ? "vendor_request" : "silva_request",
+      origin: "silva_request",
       status: "submitted",
       farmEstateId: dto.farmEstateId || null,
       suggestedAfpLineId: null,
       requestedByUserId: user.id,
-      vendorId: isVendor ? user.vendorId : null,
+      vendorId: null,
     }),
     include,
   });
@@ -434,9 +414,9 @@ exports.convertToAfe = async (id, dto, user) => {
     if (!afp) throw new AppError(404, "NOT_FOUND", "AFP line not found.");
   }
 
-  const cost = dto.estimatedCostUsd != null ? Number(dto.estimatedCostUsd) : null;
+  const cost = dto.estimatedCostEtb != null ? Number(dto.estimatedCostEtb) : null;
   if (cost == null || !(cost > 0)) {
-    throw new AppError(400, "VALIDATION_ERROR", "Estimated cost (USD) is required to convert.");
+    throw new AppError(400, "VALIDATION_ERROR", "Estimated cost (ETB) is required to convert.");
   }
 
   const discipline = dto.operatingDiscipline || parseDiscipline(row.description);

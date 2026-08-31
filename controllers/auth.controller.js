@@ -1,4 +1,5 @@
 const catchAsync = require("../utils/catchAsync");
+const { resolveAppBaseUrl } = require("../utils/appBaseUrl");
 const authService = require("../services/auth.service");
 const authTotp = require("../services/auth.totp.service");
 
@@ -112,13 +113,21 @@ exports.listMembers = catchAsync(async (req, res) => {
 });
 
 exports.createInvite = catchAsync(async (req, res) => {
-  const data = await authService.createInvite(req.user, req.params.organizationId, req.validatedBody);
+  const appBaseUrl = resolveAppBaseUrl(req);
+  const data = await authService.createInvite(req.user, req.params.organizationId, req.validatedBody, {
+    appBaseUrl,
+  });
   res.status(201).json({ data });
 });
 
 exports.listInvites = catchAsync(async (req, res) => {
   const { items, meta } = await authService.listInvites(req.user, req.params.organizationId, req.query);
   res.json({ data: items, meta });
+});
+
+exports.previewInvite = catchAsync(async (req, res) => {
+  const data = await authService.previewInvite(req.params.inviteId, req.query.token);
+  res.json({ data });
 });
 
 exports.acceptInvite = catchAsync(async (req, res) => {

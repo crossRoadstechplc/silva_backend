@@ -67,8 +67,6 @@ async function runForProgram(programId) {
   }
 
   const year = new Date().getUTCFullYear();
-  const cfg = await prisma.platform_config.findUnique({ where: { programId } });
-  const fx = cfg ? Number(cfg.fxRateEtbPerUsd) : 57.2;
   const lines = await prisma.afp_lines.findMany({ where: { programId, year } });
   for (const line of lines) {
     const afes = await prisma.afes.findMany({ where: { afpLineId: line.id, status: { notIn: ["rejected"] } } });
@@ -76,10 +74,9 @@ async function runForProgram(programId) {
     const settlements = await prisma.owner_settlements.findMany({
       where: { workOrderId: { in: wos.map((w) => w.id) }, status: "settled" },
     });
-    const actualUsd = settlements.reduce((s, st) => s + Number(st.amountEtb) / fx, 0);
-    const percent = Number(line.budgetAllocatedUsd)
-      ? Math.round((actualUsd / Number(line.budgetAllocatedUsd)) * 100)
-      : 0;
+    const actualEtb = settlements.reduce((s, st) => s + Number(st.amountEtb), 0);
+    const budgetEtb = Number(line.budgetAllocatedEtb ?? line.budgetAllocatedUsd);
+    const percent = budgetEtb ? Math.round((actualEtb / budgetEtb) * 100) : 0;
     const health = utilizationHealth(percent);
     if (health === "watch" || health === "over_budget") {
       await createNotification({

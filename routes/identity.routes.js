@@ -19,6 +19,7 @@ orgRouter.post("/:organizationId/invites", validate(schemas.inviteCreate), authC
 orgRouter.get("/:organizationId/invites", authController.listInvites);
 
 const inviteRouter = express.Router();
+inviteRouter.get("/:inviteId/preview", authController.previewInvite);
 inviteRouter.post("/:inviteId/accept", validate(schemas.inviteAccept), authController.acceptInvite);
 inviteRouter.post("/:inviteId/revoke", authenticateJWT, authController.revokeInvite);
 

@@ -52,7 +52,7 @@ exports.create = async (dto, user) => {
   const afp = await prisma.afp_lines.findFirst({ where: { id: dto.afpLineId, programId } });
   if (!afp) throw new AppError(404, "NOT_FOUND", "AFP line not found.");
   const thresholds = await getThresholds(programId);
-  const band = computeBand(dto.estimatedCostUsd, thresholds);
+  const band = computeBand(dto.estimatedCostEtb, thresholds);
   const silvaApprovalRequired = band === "C" || band === "D";
   const id = await nextTextId("afe", "AFE");
   const afe = await prisma.afes.create({
@@ -61,7 +61,7 @@ exports.create = async (dto, user) => {
       afpLineId: dto.afpLineId,
       operatingDiscipline: dto.operatingDiscipline,
       description: dto.description,
-      estimatedCostUsd: decimal(dto.estimatedCostUsd),
+      estimatedCostUsd: decimal(dto.estimatedCostEtb),
       band,
       silvaApprovalRequired,
       createdByUserId: user.id,
@@ -77,7 +77,7 @@ exports.update = async (id, dto, user) => {
   if (isVendorRole(user.role) && afe.createdByUserId !== user.id) {
     throw new AppError(404, "NOT_FOUND", "AFE not found");
   }
-  const cost = dto.estimatedCostUsd !== undefined ? dto.estimatedCostUsd : Number(afe.estimatedCostUsd);
+  const cost = dto.estimatedCostEtb !== undefined ? dto.estimatedCostEtb : Number(afe.estimatedCostUsd);
   const thresholds = await getThresholds(requireProgramId(user));
   const band = computeBand(cost, thresholds);
   const updated = await prisma.afes.update({

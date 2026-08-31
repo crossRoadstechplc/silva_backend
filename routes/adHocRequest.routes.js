@@ -10,9 +10,8 @@ const adHoc = require("../controllers/adHocRequest.controller");
 
 const SILVA = ["silva_owner", "silva_country_manager", "silva_finance"];
 const SPX = ["spx_principal", "spx_account_handler", "spx_field_supervisor", "system_admin"];
-const VENDOR = ["vendor_admin", "vendor_manager", "vendor_supervisor", "vendor_field_lead"];
-const READERS = [...SILVA, ...SPX, ...VENDOR];
-const SUBMITTERS = [...SILVA, ...VENDOR];
+const READERS = [...SILVA, ...SPX];
+const SUBMITTERS = [...SILVA, ...SPX];
 
 const router = express.Router();
 router.use(authenticateJWT, requireProgramAccess, setProgramRls);
