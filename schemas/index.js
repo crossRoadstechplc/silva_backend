@@ -138,8 +138,14 @@ const adHocRequestCreate = z.object({
   title: z.string().min(1),
   description: z.string().nullable().optional(),
   operatingDiscipline: z.string().min(1).optional(),
+  operationKind: z.enum(["intervention", "project"]).optional(),
   urgency: z.enum(["low", "normal", "high", "emergency", "urgent"]).optional(),
   estimatedCostUsd: z.number().positive().nullable().optional(),
+  estimatedAmountEtb: z.number().positive().nullable().optional(),
+  plannedStartDate: z.string().optional(),
+  plannedEndDate: z.string().optional(),
+  blockIds: z.array(z.string()).optional(),
+  activityIds: z.array(z.string()).optional(),
   farmEstateId: z.string().nullable().optional(),
   submit: z.boolean().optional(),
 });
@@ -151,6 +157,11 @@ const adHocRequestUpdate = z
     operatingDiscipline: z.string().min(1).optional(),
     urgency: z.enum(["low", "normal", "high", "emergency", "urgent"]).optional(),
     estimatedCostUsd: z.number().positive().nullable().optional(),
+    estimatedAmountEtb: z.number().positive().nullable().optional(),
+    plannedStartDate: z.string().optional(),
+    plannedEndDate: z.string().optional(),
+    blockIds: z.array(z.string()).optional(),
+    activityIds: z.array(z.string()).optional(),
     farmEstateId: z.string().nullable().optional(),
   })
   .refine((data) => Object.values(data).some((v) => v !== undefined), {
@@ -172,6 +183,12 @@ const adHocRequestConvert = z.object({
   operatingDiscipline: z.string().min(1).optional(),
   description: z.string().min(1).optional(),
   estimatedCostUsd: z.number().positive(),
+  notes: z.string().optional(),
+});
+
+const adHocRequestConvertCropfort = z.object({
+  title: z.string().min(1).optional(),
+  amountEtb: z.number().positive().optional(),
   notes: z.string().optional(),
 });
 
@@ -462,4 +479,5 @@ module.exports = {
   adHocRequestUpdate,
   adHocRequestDismiss,
   adHocRequestConvert,
+  adHocRequestConvertCropfort,
 };

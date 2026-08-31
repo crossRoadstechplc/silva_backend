@@ -35,3 +35,13 @@ exports.convert = catchAsync(async (req, res) => {
   const data = await adHocRequest.convertToAfe(req.params.id, req.validatedBody || req.body, req.user);
   res.json({ data });
 });
+
+exports.convertCropfort = catchAsync(async (req, res) => {
+  const data = await adHocRequest.convertToCropfortAfe(req.params.id, req.validatedBody || req.body, req.user);
+  res.json({ data });
+});
+
+exports.stats = catchAsync(async (req, res) => {
+  const data = await adHocRequest.stats(req.user);
+  res.json({ data });
+});

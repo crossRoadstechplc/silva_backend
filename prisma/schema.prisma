@@ -331,7 +331,19 @@ enum CropfortAfeSourceType {
   afp_line
   weekly_submission
   intervention
+  project
   manual
+}
+
+enum CoreOperationKind {
+  intervention
+  project
+}
+
+enum CoreOperationProjectStatus {
+  active
+  complete
+  closed
 }
 
 enum OpexReserveEnforcement {
@@ -497,6 +509,7 @@ model programs {
   blockFieldTickets     block_field_tickets[]
   weeklySubmissions     weekly_submissions[]
   cropfortAfes          cropfort_afes[]
+  coreOperationProjects core_operation_projects[]
 }
 
 model program_memberships {
@@ -1340,42 +1353,73 @@ model work_plan_submissions {
 }
 
 model activity_requests {
-  id                   String                 @id
-  programId            String
-  farmEstateId         String?
-  requestType          ActivityRequestType
-  title                String
-  description          String?
-  urgency              ActivityRequestUrgency @default(normal)
-  blocksOrAreas        String?
-  blockCode            String?
-  status               ActivityRequestStatus  @default(submitted)
-  origin               ActivityRequestOrigin
-  requestedByUserId    String
-  vendorId             String?
-  activityCatalogId    String?
-  workPlanSubmissionId String?
-  suggestedAfpLineId   String?
-  convertedAfeId       String?
-  dismissalReason      String?
-  convertedAt          DateTime?
-  dismissedAt          DateTime?
-  createdAt            DateTime               @default(now())
-  updatedAt            DateTime               @updatedAt
+  id                     String                 @id
+  programId              String
+  farmEstateId           String?
+  requestType            ActivityRequestType
+  operationKind          CoreOperationKind      @default(intervention)
+  title                  String
+  description            String?
+  urgency                ActivityRequestUrgency @default(normal)
+  blocksOrAreas          String?
+  blockCode              String?
+  blockIds               String[]               @default([])
+  activityIds            String[]               @default([])
+  plannedStartDate       DateTime?              @db.Date
+  plannedEndDate         DateTime?              @db.Date
+  estimatedAmountEtb     Decimal?               @db.Decimal(14, 2)
+  status                 ActivityRequestStatus  @default(submitted)
+  origin                 ActivityRequestOrigin
+  requestedByUserId      String
+  vendorId               String?
+  activityCatalogId      String?
+  workPlanSubmissionId   String?
+  suggestedAfpLineId     String?
+  convertedAfeId         String?
+  convertedCropfortAfeId String?                @unique
+  dismissalReason        String?
+  convertedAt            DateTime?
+  dismissedAt            DateTime?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
 
-  program              programs               @relation(fields: [programId], references: [id])
-  farmEstate           farm_estates?          @relation(fields: [farmEstateId], references: [id])
-  suggestedAfpLine     afp_lines?             @relation(fields: [suggestedAfpLineId], references: [id])
-  requestedBy          users                  @relation(fields: [requestedByUserId], references: [id])
-  vendor               vendors?               @relation(fields: [vendorId], references: [id])
-  activityCatalog      activity_catalog?      @relation(fields: [activityCatalogId], references: [id])
-  workPlanSubmission   work_plan_submissions? @relation(fields: [workPlanSubmissionId], references: [id])
-  convertedAfe         afes?
+  program                programs                  @relation(fields: [programId], references: [id])
+  farmEstate             farm_estates?             @relation(fields: [farmEstateId], references: [id])
+  suggestedAfpLine       afp_lines?                @relation(fields: [suggestedAfpLineId], references: [id])
+  requestedBy            users                     @relation(fields: [requestedByUserId], references: [id])
+  vendor                 vendors?                  @relation(fields: [vendorId], references: [id])
+  activityCatalog        activity_catalog?         @relation(fields: [activityCatalogId], references: [id])
+  workPlanSubmission     work_plan_submissions?    @relation(fields: [workPlanSubmissionId], references: [id])
+  convertedAfe           afes?
+  convertedCropfortAfe   cropfort_afes?            @relation("CoreOpCropfortAfe", fields: [convertedCropfortAfeId], references: [id])
+  coreOperationProject   core_operation_projects?
 
   @@index([origin, status])
   @@index([programId, status])
+  @@index([programId, operationKind, status])
   @@index([requestedByUserId])
   @@index([vendorId])
+}
+
+model core_operation_projects {
+  id            String                     @id
+  programId     String
+  requestId     String                     @unique
+  cropfortAfeId String?                    @unique
+  title         String
+  startDate     DateTime                   @db.Date
+  endDate       DateTime                   @db.Date
+  blockIds      String[]                   @default([])
+  activityIds   String[]                   @default([])
+  status        CoreOperationProjectStatus @default(active)
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+
+  program     programs           @relation(fields: [programId], references: [id])
+  request     activity_requests  @relation(fields: [requestId], references: [id])
+  cropfortAfe cropfort_afes?     @relation(fields: [cropfortAfeId], references: [id])
+
+  @@index([programId, status])
 }
 
 model farm_estates {
@@ -1677,6 +1721,8 @@ model cropfort_afes {
   createdBy  users           @relation("CropfortAfeCreator", fields: [createdByUserId], references: [id])
   supersedes cropfort_afes?  @relation("CropfortAfeVersion", fields: [supersedesId], references: [id])
   superseded cropfort_afes[] @relation("CropfortAfeVersion")
+  sourceRequest activity_requests? @relation("CoreOpCropfortAfe")
+  coreOperationProject core_operation_projects?
 
   @@index([programId, status])
   @@index([programId, band])

@@ -28,6 +28,7 @@ async function resetDatabase() {
   await deleteManySafe("activity_master");
   await deleteManySafe("activity_templates");
   await deleteManySafe("cropfort_afes");
+  await deleteManySafe("core_operation_projects");
   await deleteManySafe("cropfort_user_roles");
 
   await deleteManySafe("activity_schedule");
@@ -52,6 +53,7 @@ async function resetDatabase() {
     await prisma.message_thread_reads.deleteMany();
     await prisma.messages.deleteMany();
     await prisma.message_threads.deleteMany();
+    await deleteManySafe("core_operation_projects");
     await prisma.activity_requests.deleteMany();
     await prisma.item_comments.deleteMany();
   } catch {

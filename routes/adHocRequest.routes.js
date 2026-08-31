@@ -17,6 +17,7 @@ const SUBMITTERS = [...SILVA, ...VENDOR];
 const router = express.Router();
 router.use(authenticateJWT, requireProgramAccess, setProgramRls);
 
+router.get("/stats/summary", requireRole(READERS), adHoc.stats);
 router.get("/", requireRole(READERS), adHoc.list);
 router.post("/", requireRole(SUBMITTERS), validate(schemas.adHocRequestCreate), auditLog("ad_hoc_request"), adHoc.create);
 router.get("/:id", requireRole(READERS), adHoc.findOne);
@@ -24,5 +25,12 @@ router.patch("/:id", requireRole(SUBMITTERS), validate(schemas.adHocRequestUpdat
 router.post("/:id/submit", requireRole(SUBMITTERS), auditLog("ad_hoc_request"), adHoc.submit);
 router.post("/:id/dismiss", requireRole(SPX), validate(schemas.adHocRequestDismiss), auditLog("ad_hoc_request"), adHoc.dismiss);
 router.post("/:id/convert", requireRole(SPX), validate(schemas.adHocRequestConvert), auditLog("ad_hoc_request"), adHoc.convert);
+router.post(
+  "/:id/convert-cropfort",
+  requireRole(SPX),
+  validate(schemas.adHocRequestConvertCropfort),
+  auditLog("ad_hoc_request"),
+  adHoc.convertCropfort,
+);
 
 module.exports = router;

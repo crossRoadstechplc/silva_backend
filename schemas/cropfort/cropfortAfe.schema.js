@@ -3,7 +3,7 @@ const { z } = require("zod");
 const createCropfortAfe = z.object({
   title: z.string().min(1),
   amountEtb: z.coerce.number().positive(),
-  sourceType: z.enum(["afp_line", "weekly_submission", "intervention", "manual"]),
+  sourceType: z.enum(["afp_line", "weekly_submission", "intervention", "project", "manual"]),
   sourceId: z.string().optional().nullable(),
 });
 
