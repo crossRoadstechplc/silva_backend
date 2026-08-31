@@ -19,4 +19,5 @@ module.exports = {
   BCRYPT_ROUNDS: Number(process.env.BCRYPT_ROUNDS || 10),
   RATE_LIMIT_WINDOW_MS: Number(process.env.RATE_LIMIT_WINDOW_MS || 900000),
   RATE_LIMIT_MAX: Number(process.env.RATE_LIMIT_MAX || 20),
+  CROPFORT_OTP_ON_LOGIN: process.env.CROPFORT_OTP_ON_LOGIN !== "false",
 };

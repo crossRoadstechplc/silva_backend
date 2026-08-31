@@ -35,6 +35,17 @@ module.exports = (err, req, res, next) => {
     });
   }
 
+  if (err && err.code === "P1001") {
+    return res.status(503).json({
+      error: {
+        code: "DATABASE_UNAVAILABLE",
+        message: "Database is temporarily unreachable. Check Supabase project status and retry.",
+        details: [],
+      },
+      requestId: req.requestId,
+    });
+  }
+
   console.error("Error:", err);
   return res.status(500).json({
     error: {

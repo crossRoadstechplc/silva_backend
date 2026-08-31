@@ -7,6 +7,8 @@ const PUBLIC = new Set([
   "POST /auth/login",
   "POST /auth/signup",
   "POST /auth/refresh",
+  "POST /auth/otp/verify",
+  "POST /auth/totp/enroll",
   "POST /auth/password/forgot",
   "POST /auth/password/reset",
 ]);
@@ -81,6 +83,7 @@ module.exports = async (req, res, next) => {
       organization: user.organization,
       activeProgramId: user.activeProgramId || null,
       tenantOrgId: user.organizationId,
+      sessionId: decoded.sessionId || null,
     };
     next();
   } catch (err) {

@@ -1,5 +1,10 @@
 const catchAsync = require("../utils/catchAsync");
 const authService = require("../services/auth.service");
+const authTotp = require("../services/auth.totp.service");
+
+exports.config = catchAsync(async (_req, res) => {
+  res.json({ data: { otpOnLogin: authTotp.otpEnabled() } });
+});
 
 exports.login = catchAsync(async (req, res) => {
   const data = await authService.login(req.validatedBody.email, req.validatedBody.password);
@@ -52,6 +57,32 @@ exports.reset = catchAsync(async (req, res) => {
 
 exports.changePassword = catchAsync(async (req, res) => {
   const data = await authService.changePassword(req.user, req.validatedBody);
+  res.json({ data });
+});
+
+exports.verifyOtp = catchAsync(async (req, res) => {
+  const data = await authService.verifyOtp(
+    req.validatedBody.otpChallengeToken,
+    req.validatedBody.code,
+    req.validatedBody.deviceLabel,
+  );
+  const me = await authService.me({ id: data.user.id });
+  res.json({ data: { ...data, me } });
+});
+
+exports.enrollTotp = catchAsync(async (req, res) => {
+  const data = await authService.enrollTotp(req.validatedBody.enrollmentToken, req.validatedBody.code);
+  const me = await authService.me({ id: data.user.id });
+  res.json({ data: { ...data, me } });
+});
+
+exports.listSessions = catchAsync(async (req, res) => {
+  const data = await authService.listSessions(req.user.id);
+  res.json({ data });
+});
+
+exports.revokeSession = catchAsync(async (req, res) => {
+  const data = await authService.revokeSession(req.user.id, req.params.sessionId);
   res.json({ data });
 });
 

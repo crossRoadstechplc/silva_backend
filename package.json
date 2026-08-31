@@ -17,7 +17,10 @@
     "postman:generate": "node scripts/generate-postman.js",
     "test": "jest --runInBand --forceExit",
     "test:unit": "jest tests/unit --runInBand --forceExit",
-    "test:integration": "jest tests/integration --runInBand --forceExit"
+    "test:integration": "jest tests/integration --runInBand --forceExit",
+    "test:invariants": "jest tests/invariants --runInBand --forceExit",
+    "verify:cropfort-demo": "node scripts/verify-cropfort-demo.js",
+    "db:ping": "node scripts/test-db-connection.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
@@ -38,6 +41,8 @@
     "helmet": "^8.0.0",
     "ioredis": "^5.4.2",
     "jsonwebtoken": "^9.0.2",
+    "otplib": "^13.5.0",
+    "qrcode": "^1.5.4",
     "swagger-ui-express": "^5.0.1",
     "xlsx": "^0.18.5",
     "zod": "^3.24.1"

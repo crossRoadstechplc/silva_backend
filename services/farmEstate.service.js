@@ -1,6 +1,7 @@
 const prisma = require("../config/database");
 const AppError = require("../utils/AppError");
 const { uuid } = require("../utils/ids");
+const { assertHectareContract } = require("../lib/hectareContract");
 const { decimal, parseListQuery, meta } = require("../utils/helpers");
 const { isVendorRole, isSpxRole, isSilvaRole } = require("../utils/roles");
 const { scopedWhere, programCreateData, requireProgramId } = require("./utils/programScope");
@@ -223,6 +224,7 @@ exports.addBlock = async (estateId, dto, user) => {
       treeCount: dto.treeCount ?? null,
     },
   });
+  await assertHectareContract(estate.programId);
   return {
     id: block.id,
     code: block.code,

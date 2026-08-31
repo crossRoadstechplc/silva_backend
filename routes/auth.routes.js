@@ -8,7 +8,10 @@ const schemas = require("../schemas");
 
 const router = express.Router();
 
+router.get("/config", authController.config);
 router.post("/login", rateLimit, validate(schemas.login), authController.login);
+router.post("/otp/verify", rateLimit, validate(schemas.verifyOtp), authController.verifyOtp);
+router.post("/totp/enroll", rateLimit, validate(schemas.enrollTotp), authController.enrollTotp);
 router.post("/signup", rateLimit, authController.signup);
 router.post("/logout", authenticateJWT, authController.logout);
 router.post("/refresh", rateLimit, validate(schemas.refresh), authController.refresh);
@@ -18,5 +21,7 @@ router.patch("/tenant/branding", authenticateJWT, validate(schemas.tenantBrandin
 router.post("/password/forgot", rateLimit, validate(schemas.forgot), authController.forgot);
 router.post("/password/reset", rateLimit, validate(schemas.reset), authController.reset);
 router.post("/password/change", authenticateJWT, validate(schemas.changePassword), authController.changePassword);
+router.get("/sessions", authenticateJWT, authController.listSessions);
+router.delete("/sessions/:sessionId", authenticateJWT, authController.revokeSession);
 
 module.exports = router;

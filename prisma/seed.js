@@ -5,23 +5,40 @@ const prisma = new PrismaClient();
 const PASSWORD = "Password123!";
 const PROGRAM_ID = "prg_shecha";
 
-async function main() {
-  const hash = await bcrypt.hash(PASSWORD, 10);
+/** Delete rows when the table exists; ignore missing tables (pre-migration). */
+async function deleteManySafe(modelName) {
+  try {
+    await prisma[modelName].deleteMany();
+  } catch {
+    /* table may not exist before migration */
+  }
+}
 
+async function resetDatabase() {
   await prisma.gl_journal_export_lines.deleteMany();
   await prisma.gl_journal_exports.deleteMany();
-  try {
-    await prisma.activity_schedule.deleteMany();
-    await prisma.activity_catalog.deleteMany();
-    await prisma.afp_line_schedules.deleteMany();
-    await prisma.work_order_block_assignments.deleteMany();
-    await prisma.farm_estate_vendors.deleteMany();
-    await prisma.farm_blocks.deleteMany();
-    await prisma.farm_estates.deleteMany();
-    await prisma.work_plan_submissions.deleteMany();
-  } catch {
-    /* tables may not exist before migration */
-  }
+
+  // Cropfort tables reference farm_blocks — delete them before blocks/estates.
+  await deleteManySafe("spx_validation_checks");
+  await deleteManySafe("weekly_submission_tickets");
+  await deleteManySafe("weekly_submissions");
+  await deleteManySafe("block_field_tickets");
+  await deleteManySafe("afp_block_lines");
+  await deleteManySafe("rate_card_lines");
+  await deleteManySafe("activity_master");
+  await deleteManySafe("activity_templates");
+  await deleteManySafe("cropfort_afes");
+  await deleteManySafe("cropfort_user_roles");
+
+  await deleteManySafe("activity_schedule");
+  await deleteManySafe("activity_catalog");
+  await deleteManySafe("afp_line_schedules");
+  await deleteManySafe("work_order_block_assignments");
+  await deleteManySafe("farm_estate_vendors");
+  await deleteManySafe("farm_blocks");
+  await deleteManySafe("farm_estates");
+  await deleteManySafe("work_plan_submissions");
+
   await prisma.audit_log.deleteMany();
   await prisma.notifications.deleteMany();
   await prisma.attachments.deleteMany();
@@ -74,6 +91,12 @@ async function main() {
   } catch {
     /* table may not exist before migration */
   }
+}
+
+async function main() {
+  const hash = await bcrypt.hash(PASSWORD, 10);
+
+  await resetDatabase();
 
   const silva = await prisma.organizations.create({
     data: {
@@ -123,6 +146,8 @@ async function main() {
       slug: "shecha-estate",
       createdByOrgId: spx.id,
       brandingJson: { tagline: "Kaffa Zone turnaround" },
+      cropfortHectareContractTotal: 220,
+      cropfortOpexReserveBalanceEtb: 15000000,
     },
   });
 
@@ -757,7 +782,106 @@ async function main() {
     ],
   });
 
+  try {
+    await prisma.cropfort_user_roles.createMany({
+      data: [
+        { id: "cfr_spx", programId: program.id, userId: principal.id, role: "spx_validator" },
+        { id: "cfr_silva", programId: program.id, userId: "usr_silva_owner", role: "farm_owner" },
+        { id: "cfr_bagro", programId: program.id, userId: "usr_bagro_admin", role: "bagro_office" },
+        { id: "cfr_field", programId: program.id, userId: lead.id, role: "field_supervisor" },
+        { id: "cfr_admin", programId: program.id, userId: "usr_spx_admin", role: "spx_platform_admin" },
+      ],
+      skipDuplicates: true,
+    });
+  } catch (e) {
+    console.warn("Cropfort roles seed skipped:", e.message);
+  }
+
+  try {
+    await prisma.activity_templates.createMany({
+      data: [
+        {
+          id: "atpl_prune",
+          code: "PRUNE-01",
+          name: "Primary pruning",
+          category: "Pruning",
+          unitOfMeasure: "tree",
+        },
+        {
+          id: "atpl_fert",
+          code: "FERT-01",
+          name: "Fertilizer application",
+          category: "Nutrition",
+          unitOfMeasure: "ha",
+        },
+        {
+          id: "atpl_weed",
+          code: "WEED-01",
+          name: "Weeding",
+          category: "Weed control",
+          unitOfMeasure: "ha",
+        },
+        {
+          id: "atpl_harv",
+          code: "HARV-01",
+          name: "Cherry harvest",
+          category: "Harvest",
+          unitOfMeasure: "kg",
+        },
+      ],
+      skipDuplicates: true,
+    });
+    await prisma.activity_master.createMany({
+      data: [
+        {
+          id: "act_prune",
+          programId: program.id,
+          templateId: "atpl_prune",
+          code: "PRUNE-01",
+          name: "Primary pruning",
+          laborNorm: 0.25,
+          materialNorm: 0.05,
+        },
+        {
+          id: "act_fert",
+          programId: program.id,
+          templateId: "atpl_fert",
+          code: "FERT-01",
+          name: "Fertilizer application",
+          laborNorm: 0.4,
+          materialNorm: 1.2,
+        },
+        {
+          id: "act_weed",
+          programId: program.id,
+          templateId: "atpl_weed",
+          code: "WEED-01",
+          name: "Weeding",
+          laborNorm: 0.6,
+          materialNorm: 0.1,
+        },
+      ],
+      skipDuplicates: true,
+    });
+  } catch (e) {
+    console.warn("Cropfort activity seed skipped:", e.message);
+  }
+
+  try {
+    const { seedCropfortDemo } = require("./seed/cropfortDemo");
+    const demo = await seedCropfortDemo(prisma, {
+      programId: program.id,
+      principalId: principal.id,
+      silvaOwnerId: "usr_silva_owner",
+      bagroLeadId: lead.id,
+    });
+    console.log("Cropfort demo fixtures:", demo.counts, `(week ${demo.weekEnding})`);
+  } catch (e) {
+    console.warn("Cropfort demo seed skipped:", e.message);
+  }
+
   console.log("Seed complete. Program:", PROGRAM_ID, "Password: Password123!");
+  console.log("Cropfort demo verify: npm run verify:cropfort-demo (server must be running)");
 }
 
 main()

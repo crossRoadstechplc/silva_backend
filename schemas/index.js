@@ -14,6 +14,15 @@ const changePassword = z.object({
   currentPassword: z.string().min(1),
   newPassword: z.string().min(8),
 });
+const verifyOtp = z.object({
+  otpChallengeToken: z.string().min(1),
+  code: z.string().min(6).max(8),
+  deviceLabel: z.string().optional(),
+});
+const enrollTotp = z.object({
+  enrollmentToken: z.string().min(1),
+  code: z.string().min(6).max(8),
+});
 const signup = z.object({
   name: z.string().min(1),
   email: z.string().email(),
@@ -400,6 +409,8 @@ module.exports = {
   forgot,
   reset,
   changePassword,
+  verifyOtp,
+  enrollTotp,
   signup,
   registrationSubmit,
   registrationActivate,

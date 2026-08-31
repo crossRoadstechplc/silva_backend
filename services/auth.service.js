@@ -8,6 +8,7 @@ const { userJson, organizationJson, inviteJson } = require("../utils/serializers
 const { isVendorRole, VENDOR_ROLES, SYSTEM_ROLES, permissionsFor } = require("../utils/roles");
 const { parseListQuery, meta } = require("../utils/helpers");
 const programService = require("./program.service");
+const authTotp = require("./auth.totp.service");
 
 function adminRoleForOrgType(type) {
   if (type === "silva") return "silva_owner";
@@ -15,7 +16,7 @@ function adminRoleForOrgType(type) {
   return "vendor_admin";
 }
 
-function signAccess(user) {
+function signAccess(user, sessionId) {
   return jwt.sign(
     {
       userId: user.id,
@@ -24,6 +25,7 @@ function signAccess(user) {
       organizationId: user.organizationId,
       organizationType: user.organization?.type,
       activeProgramId: user.activeProgramId || null,
+      sessionId: sessionId || null,
       typ: "access",
     },
     env.JWT_SECRET,
@@ -31,7 +33,7 @@ function signAccess(user) {
   );
 }
 
-async function tokenBundle(user) {
+async function tokenBundle(user, options = {}) {
   const full = await prisma.users.findUnique({
     where: { id: user.id },
     include: { organization: { include: { vendor: true } }, memberships: true },
@@ -40,18 +42,24 @@ async function tokenBundle(user) {
   const refreshToken = jwt.sign({ sub: full.id, jti, typ: "refresh" }, env.JWT_REFRESH_SECRET, {
     expiresIn: env.JWT_REFRESH_EXPIRES_IN,
   });
+  const now = new Date();
+  const otpVerified = options.otpVerified ?? !authTotp.otpEnabled();
   await prisma.refresh_sessions.create({
     data: {
       id: jti,
       userId: full.id,
       tokenHash: hashToken(refreshToken),
       expiresAt: new Date(Date.now() + env.JWT_REFRESH_EXPIRES_IN * 1000),
+      otpVerifiedAt: otpVerified ? now : null,
+      deviceLabel: options.deviceLabel || null,
+      lastActiveAt: now,
     },
   });
   return {
-    accessToken: signAccess(full),
+    accessToken: signAccess(full, jti),
     refreshToken,
     expiresIn: env.JWT_ACCESS_EXPIRES_IN,
+    sessionId: jti,
     user: userJson(full),
   };
 }
@@ -80,6 +88,25 @@ exports.login = async (email, password) => {
   }
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) throw new AppError(401, "UNAUTHENTICATED", "Invalid email or password.");
+
+  if (authTotp.otpEnabled()) {
+    if (!user.totpEnrolledAt || !user.totpSecret) {
+      const enrollment = await authTotp.beginEnrollment(user.id);
+      return {
+        requiresTotpEnrollment: true,
+        enrollmentToken: enrollment.enrollmentToken,
+        qrDataUrl: enrollment.qrDataUrl,
+        user: { id: user.id, email: user.email, name: user.name },
+      };
+    }
+    const otpChallengeToken = await authTotp.createLoginChallenge(user.id);
+    return {
+      requiresOtp: true,
+      otpChallengeToken,
+      user: { id: user.id, email: user.email, name: user.name },
+    };
+  }
+
   const tokens = await tokenBundle(user);
   const me = await exports.me({ id: user.id });
   return { ...tokens, me };
@@ -120,7 +147,8 @@ exports.refresh = async (refreshToken) => {
   await prisma.refresh_sessions.update({ where: { id: session.id }, data: { revoked: true } });
   const user = await prisma.users.findUnique({ where: { id: session.userId } });
   if (!user || !user.active) throw new AppError(401, "UNAUTHENTICATED", "Invalid or expired token");
-  return tokenBundle(user);
+  const otpVerified = Boolean(session.otpVerifiedAt) || !authTotp.otpEnabled();
+  return tokenBundle(user, { otpVerified });
 };
 
 exports.me = async (user) => {
@@ -485,3 +513,20 @@ exports.changeMembershipRole = async (user, membershipId, role) => {
     createdAt: updated.createdAt.toISOString(),
   };
 };
+
+exports.verifyOtp = async (challengeToken, code, deviceLabel) => {
+  return authTotp.verifyLoginOtp(challengeToken, code, (user, opts) =>
+    tokenBundle(user, { ...opts, deviceLabel }),
+  );
+};
+
+exports.enrollTotp = async (enrollmentToken, code) => {
+  const user = await authTotp.completeEnrollment(enrollmentToken, code);
+  return tokenBundle(user, { otpVerified: true });
+};
+
+exports.listSessions = async (userId) => authTotp.listSessions(userId);
+
+exports.revokeSession = async (userId, sessionId) => authTotp.revokeSession(userId, sessionId);
+
+exports.issueTokens = (user, options) => tokenBundle(user, options);

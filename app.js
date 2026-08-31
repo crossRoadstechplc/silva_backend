@@ -47,7 +47,9 @@ const registrationRequestRoutes = require("./routes/registrationRequest.routes")
 const contactRoutes = require("./routes/contact.routes");
 const messageRoutes = require("./routes/message.routes");
 const adHocRequestRoutes = require("./routes/adHocRequest.routes");
+const cropfortRoutes = require("./routes/cropfort");
 const setProgramRls = require("./middleware/setProgramRls");
+const requireOtpVerified = require("./middleware/requireOtpVerified");
 
 const app = express();
 
@@ -121,6 +123,8 @@ app.use("/api/v1/items", itemRoutes);
 app.use("/api/v1/exports", ...programScoped, exportRoutes);
 app.use("/api/v1/messages", ...programScoped, messageRoutes);
 app.use("/api/v1/ad-hoc-requests", ...programScoped, adHocRequestRoutes);
+const cropfortScoped = [...programScoped, requireOtpVerified];
+app.use("/api/v1/cropfort", cropfortScoped, cropfortRoutes);
 
 app.use((req, res) => {
   res.status(404).json({
