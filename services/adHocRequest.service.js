@@ -2,7 +2,7 @@ const prisma = require("../config/database");
 const AppError = require("../utils/AppError");
 const { uuid, nextTextId } = require("../utils/ids");
 const { decimal, parseListQuery, meta } = require("../utils/helpers");
-const { isSilvaRole, isSpxRole } = require("../utils/roles");
+const { isSilvaRole, isSpxRole, isVendorRole } = require("../utils/roles");
 const { scopedWhere, programCreateData, requireProgramId } = require("./utils/programScope");
 const computeBand = require("./utils/computeBand");
 const { computeCropfortAfeBand } = require("./costDerivation.service");
@@ -10,13 +10,20 @@ const notify = require("./workflowNotifications.service");
 
 const DISCIPLINE_PREFIX = "Discipline: ";
 
+const VENDOR_ADHOC_ROLES = new Set([
+  "vendor_admin",
+  "vendor_manager",
+  "vendor_supervisor",
+  "vendor_field_lead",
+]);
+
 function canSubmitAdHoc(user) {
-  return isSilvaRole(user.role) || isSpxRole(user.role);
+  return isSilvaRole(user.role) || isSpxRole(user.role) || (isVendorRole(user.role) && VENDOR_ADHOC_ROLES.has(user.role));
 }
 
 function assertCanSubmit(user) {
   if (!canSubmitAdHoc(user)) {
-    throw new AppError(403, "FORBIDDEN", "Only asset owners or SPX can submit core operation requests.");
+    throw new AppError(403, "FORBIDDEN", "You do not have permission to submit core operation requests.");
   }
 }
 
@@ -156,14 +163,17 @@ function assertSpx(user) {
 }
 
 function assertCanAccess(user) {
-  if (!isSilvaRole(user.role) && !isSpxRole(user.role)) {
-    throw new AppError(403, "FORBIDDEN", "Core operations are for asset owners and SPX only.");
+  if (!isSilvaRole(user.role) && !isSpxRole(user.role) && !canSubmitAdHoc(user)) {
+    throw new AppError(403, "FORBIDDEN", "Core operations are for asset owners, SPX, and vendors.");
   }
 }
 
 async function getScoped(id, user) {
   const where = scopedWhere(user, { id });
-  if (isSilvaRole(user.role)) {
+  if (isVendorRole(user.role)) {
+    where.origin = "vendor_request";
+    where.vendorId = user.vendorId || "__none__";
+  } else if (isSilvaRole(user.role)) {
     where.origin = "silva_request";
   }
   const row = await prisma.activity_requests.findFirst({
@@ -196,7 +206,10 @@ exports.findAll = async (query, user) => {
   const { page, pageSize, skip, take } = parseListQuery(query);
   const where = scopedWhere(user, {});
 
-  if (isSilvaRole(user.role)) {
+  if (isVendorRole(user.role)) {
+    where.origin = "vendor_request";
+    where.vendorId = user.vendorId || "__none__";
+  } else if (isSilvaRole(user.role)) {
     where.origin = "silva_request";
   } else if (query.origin === "silva_request" || query.origin === "vendor_request") {
     where.origin = query.origin;
@@ -260,10 +273,17 @@ exports.create = async (dto, user) => {
   const title = String(dto.title || "").trim();
   if (!title) throw new AppError(400, "VALIDATION_ERROR", "Title is required.");
 
+  const isVendor = isVendorRole(user.role);
+  if (isVendor && !user.vendorId) {
+    throw new AppError(400, "VALIDATION_ERROR", "Vendor profile is required to submit core operation requests.");
+  }
+
   if (dto.farmEstateId) {
-    const estate = await prisma.farm_estates.findFirst({
-      where: { id: dto.farmEstateId, programId, status: "active" },
-    });
+    const estateWhere = { id: dto.farmEstateId, programId, status: "active" };
+    if (isVendor) {
+      estateWhere.vendorMaps = { some: { vendorId: user.vendorId } };
+    }
+    const estate = await prisma.farm_estates.findFirst({ where: estateWhere });
     if (!estate) throw new AppError(404, "NOT_FOUND", "Farm estate not found.");
   }
 
@@ -297,12 +317,12 @@ exports.create = async (dto, user) => {
       blockIds,
       activityIds,
       estimatedAmountEtb,
-      origin: "silva_request",
+      origin: isVendor ? "vendor_request" : "silva_request",
       status: "submitted",
       farmEstateId: dto.farmEstateId || null,
       suggestedAfpLineId: null,
       requestedByUserId: user.id,
-      vendorId: null,
+      vendorId: isVendor ? user.vendorId : null,
     }),
     include,
   });

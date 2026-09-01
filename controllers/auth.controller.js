@@ -31,6 +31,12 @@ exports.updateTenantBranding = catchAsync(async (req, res) => {
   res.json({ data });
 });
 
+exports.completeOnboarding = catchAsync(async (req, res) => {
+  const programService = require("../services/program.service");
+  const data = await programService.completeOnboarding(req.user, req.validatedBody);
+  res.json({ data });
+});
+
 exports.logout = catchAsync(async (req, res) => {
   await authService.logout(req.user?.id, req.body?.refreshToken);
   res.json({ data: { ok: true } });

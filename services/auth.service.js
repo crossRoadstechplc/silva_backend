@@ -314,14 +314,31 @@ exports.listMembers = async (user, organizationId, query) => {
   };
 };
 
+function assertCanManageOrgInvites(user, org) {
+  if (isVendorRole(user.role)) {
+    const ownsOrg = user.organizationId === org.id;
+    const ownsVendor = Boolean(user.vendorId && org.vendor?.id && user.vendorId === org.vendor.id);
+    if (user.role !== "vendor_admin" || (!ownsOrg && !ownsVendor)) {
+      throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
+    }
+    return;
+  }
+  if (user.role === "system_admin") return;
+  if (["spx_principal", "silva_owner"].includes(user.role)) {
+    if (user.organizationId !== org.id) {
+      throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
+    }
+    return;
+  }
+  throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
+}
+
 exports.createInvite = async (user, organizationId, dto, { appBaseUrl } = {}) => {
   const org = await prisma.organizations.findUnique({ where: { id: organizationId }, include: { vendor: true } });
   if (!org) throw new AppError(404, "NOT_FOUND", "Organization not found.");
-  if (isVendorRole(user.role)) {
-    if (user.organizationId !== org.id || user.role !== "vendor_admin") {
-      throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
-    }
-    if (!VENDOR_ROLES.includes(dto.role)) throw new AppError(403, "FORBIDDEN", "Vendor admin cannot assign system roles.");
+  assertCanManageOrgInvites(user, org);
+  if (isVendorRole(user.role) && !VENDOR_ROLES.includes(dto.role)) {
+    throw new AppError(403, "FORBIDDEN", "Vendor admin cannot assign system roles.");
   }
   const pending = await prisma.invites.findFirst({
     where: { organizationId, email: dto.email.toLowerCase(), status: "pending" },
@@ -366,7 +383,13 @@ exports.createInvite = async (user, organizationId, dto, { appBaseUrl } = {}) =>
 };
 
 exports.listInvites = async (user, organizationId, query) => {
-  await exports.getOrganization(user, organizationId);
+  const org = await prisma.organizations.findUnique({ where: { id: organizationId }, include: { vendor: true } });
+  if (!org) throw new AppError(404, "NOT_FOUND", "Organization not found.");
+  if (isVendorRole(user.role) || ["spx_principal", "silva_owner"].includes(user.role)) {
+    assertCanManageOrgInvites(user, org);
+  } else if (user.role !== "system_admin") {
+    throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
+  }
   const { page, pageSize, skip, take, statuses } = parseListQuery(query);
   const where = { organizationId };
   if (statuses.length) where.status = { in: statuses };

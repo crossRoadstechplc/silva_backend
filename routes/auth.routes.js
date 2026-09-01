@@ -18,6 +18,7 @@ router.post("/refresh", rateLimit, validate(schemas.refresh), authController.ref
 router.get("/me", authenticateJWT, authController.me);
 router.post("/switch-program", authenticateJWT, validate(schemas.switchProgram), authController.switchProgram);
 router.patch("/tenant/branding", authenticateJWT, validate(schemas.tenantBranding), authController.updateTenantBranding);
+router.post("/onboarding/complete", authenticateJWT, validate(schemas.tenantBranding), authController.completeOnboarding);
 router.post("/password/forgot", rateLimit, validate(schemas.forgot), authController.forgot);
 router.post("/password/reset", rateLimit, validate(schemas.reset), authController.reset);
 router.post("/password/change", authenticateJWT, validate(schemas.changePassword), authController.changePassword);

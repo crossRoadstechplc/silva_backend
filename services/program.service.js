@@ -250,16 +250,67 @@ exports.listOrgInvites = async (user, programId) => {
 };
 
 exports.updateTenantBranding = async (user, dto) => {
-  if (!["silva_owner", "spx_principal", "vendor_admin", "system_admin"].includes(user.role)) {
+  if (
+    !["silva_owner", "silva_country_manager", "spx_principal", "vendor_admin", "system_admin"].includes(
+      user.role,
+    )
+  ) {
     throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
   }
+  const existing = await prisma.organizations.findUnique({ where: { id: user.organizationId } });
+  if (!existing) throw new AppError(404, "NOT_FOUND", "Organization not found.");
+  const mergedBranding =
+    dto.branding !== undefined ? { ...(existing.brandingJson || {}), ...dto.branding } : undefined;
   const org = await prisma.organizations.update({
     where: { id: user.organizationId },
     data: {
-      displayName: dto.displayName,
-      brandingJson: dto.branding !== undefined ? dto.branding : undefined,
+      displayName: dto.displayName ?? existing.displayName,
+      brandingJson: mergedBranding,
     },
   });
+  return {
+    id: org.id,
+    name: org.name,
+    slug: org.slug,
+    displayName: org.displayName,
+    type: org.type,
+    branding: org.brandingJson,
+    status: org.status,
+  };
+};
+
+exports.completeOnboarding = async (user, dto = {}) => {
+  const existing = await prisma.organizations.findUnique({ where: { id: user.organizationId } });
+  if (!existing) throw new AppError(404, "NOT_FOUND", "Organization not found.");
+
+  const canEditBranding = [
+    "silva_owner",
+    "silva_country_manager",
+    "spx_principal",
+    "vendor_admin",
+    "system_admin",
+  ].includes(user.role);
+
+  const branding = {
+    ...(existing.brandingJson || {}),
+    onboardingCompletedAt: new Date().toISOString(),
+  };
+  if (canEditBranding && dto.branding) {
+    Object.assign(branding, dto.branding);
+  } else if (!canEditBranding && dto.branding?.tagline) {
+    branding.tagline = dto.branding.tagline;
+  }
+
+  const data = { brandingJson: branding };
+  if (canEditBranding && dto.displayName) {
+    data.displayName = dto.displayName;
+  }
+
+  const org = await prisma.organizations.update({
+    where: { id: user.organizationId },
+    data,
+  });
+
   return {
     id: org.id,
     name: org.name,

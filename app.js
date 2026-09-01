@@ -158,11 +158,17 @@ process.on("SIGINT", shutdown);
 if (require.main === module) {
   const PORT = env.PORT || 3000;
   app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`Server running on port ${PORT} (${env.NODE_ENV})`);
+    console.log(`Trust proxy: ${env.TRUST_PROXY}`);
     if (allowedOrigins.length) {
       console.log(`CORS allowed origins: ${allowedOrigins.join(", ")}`);
     } else {
       console.warn("CORS: no allowed origins configured — set CORS_ORIGINS or APP_BASE_URL");
+    }
+    if (env.SMTP_HOST && env.SMTP_USER) {
+      console.log(`Mail: SMTP ${env.SMTP_USER} @ ${env.SMTP_HOST}:${env.SMTP_PORT}`);
+    } else {
+      console.warn("Mail: SMTP not configured — add SMTP_* to server/.env");
     }
   });
 }

@@ -11,6 +11,28 @@ function resendConfigured() {
   return Boolean(env.RESEND_API_KEY);
 }
 
+function resetTransporter() {
+  if (transporter) {
+    try {
+      transporter.close();
+    } catch {
+      // ignore
+    }
+  }
+  transporter = null;
+}
+
+/** SiteGround requires From to match the authenticated mailbox. */
+function resolveFromHeader() {
+  const from = env.MAIL_FROM || "";
+  if (env.SMTP_USER && !from.includes(env.SMTP_USER)) {
+    const nameMatch = from.match(/^(.+?)\s*</);
+    const display = nameMatch ? nameMatch[1].trim() : "CropFort";
+    return `${display} <${env.SMTP_USER}>`;
+  }
+  return from;
+}
+
 function getTransporter() {
   if (!smtpConfigured()) return null;
   if (!transporter) {
@@ -18,6 +40,7 @@ function getTransporter() {
       host: env.SMTP_HOST,
       port: env.SMTP_PORT,
       secure: env.SMTP_SECURE,
+      requireTLS: !env.SMTP_SECURE && env.SMTP_PORT === 587,
       auth: {
         user: env.SMTP_USER,
         pass: env.SMTP_PASS,
@@ -29,6 +52,14 @@ function getTransporter() {
     });
   }
   return transporter;
+}
+
+function smtpAuthHint(err) {
+  const base = `SMTP auth failed for ${env.SMTP_USER} @ ${env.SMTP_HOST}:${env.SMTP_PORT}`;
+  if (err?.code === "EAUTH" || String(err?.message || "").includes("535")) {
+    return `${base}. Check SiteGround: mailbox exists, password correct, try mail.cropfort.com or port 587.`;
+  }
+  return `${base}: ${err?.message || err}`;
 }
 
 function getAppBaseUrl(appBaseUrl) {
@@ -53,14 +84,23 @@ async function sendViaSmtp({ to, subject, text, html }) {
   const transport = getTransporter();
   if (!transport) return false;
 
-  await transport.sendMail({
-    from: env.MAIL_FROM,
-    to,
-    subject,
-    text,
-    html,
-  });
-  return true;
+  const from = resolveFromHeader();
+  try {
+    await transport.sendMail({
+      from,
+      to,
+      subject,
+      text,
+      html,
+      envelope: { from: env.SMTP_USER, to },
+    });
+    return true;
+  } catch (err) {
+    resetTransporter();
+    const wrapped = new Error(smtpAuthHint(err));
+    wrapped.cause = err;
+    throw wrapped;
+  }
 }
 
 async function sendViaResend({ to, subject, text, html }) {
@@ -297,4 +337,6 @@ module.exports = {
   sendOrganizationInviteEmail,
   smtpConfigured,
   resendConfigured,
+  resetTransporter,
 };
+

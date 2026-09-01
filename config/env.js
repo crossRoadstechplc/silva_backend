@@ -1,4 +1,15 @@
-require("dotenv").config();
+const path = require("path");
+
+function trimEnv(value) {
+  const v = String(value ?? "").trim();
+  if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+    return v.slice(1, -1);
+  }
+  return v;
+}
+
+// Always load server/.env (PM2 cwd may differ from the app directory).
+require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
 module.exports = {
   NODE_ENV: process.env.NODE_ENV || "development",
@@ -37,8 +48,8 @@ module.exports = {
     const port = Number(process.env.SMTP_PORT || 587);
     return port === 465;
   })(),
-  SMTP_USER: (process.env.SMTP_USER || "").trim(),
-  SMTP_PASS: (process.env.SMTP_PASS || "").trim(),
+  SMTP_USER: trimEnv(process.env.SMTP_USER),
+  SMTP_PASS: trimEnv(process.env.SMTP_PASS),
   RESEND_API_KEY: process.env.RESEND_API_KEY || "",
   MAIL_TEST_TO: process.env.MAIL_TEST_TO || "",
   /** When true, all mail goes to MAIL_TEST_TO instead of the real recipient (dev only). */

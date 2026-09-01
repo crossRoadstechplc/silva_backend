@@ -20,7 +20,8 @@
     "test:integration": "jest tests/integration --runInBand --forceExit",
     "test:invariants": "jest tests/invariants --runInBand --forceExit",
     "verify:cropfort-demo": "node scripts/verify-cropfort-demo.js",
-    "db:ping": "node scripts/test-db-connection.js"
+    "db:ping": "node scripts/test-db-connection.js",
+    "test:smtp": "node scripts/test-smtp.js"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
