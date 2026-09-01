@@ -21,6 +21,8 @@ module.exports = {
   RATE_LIMIT_MAX: Number(process.env.RATE_LIMIT_MAX || 20),
   CROPFORT_OTP_ON_LOGIN: process.env.CROPFORT_OTP_ON_LOGIN !== "false",
   APP_BASE_URL: process.env.APP_BASE_URL || process.env.CLIENT_URL || "http://localhost:3000",
+  /** Comma-separated browser origins allowed for CORS (e.g. https://farm.spxafrica.com) */
+  CORS_ORIGINS: process.env.CORS_ORIGINS || "",
   MAIL_FROM: process.env.MAIL_FROM || "CropFort <onboarding@cropfort.local>",
   SMTP_HOST: process.env.SMTP_HOST || "",
   SMTP_PORT: Number(process.env.SMTP_PORT || 587),

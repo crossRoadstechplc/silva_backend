@@ -6,6 +6,7 @@ const requestId = require("./middleware/requestId");
 const errorHandler = require("./middleware/errorHandler");
 const prisma = require("./config/database");
 const env = require("./config/env");
+const { corsOptions, allowedOrigins } = require("./config/cors");
 const openapi = require("./docs/openapi.json");
 
 const authRoutes = require("./routes/auth.routes");
@@ -53,8 +54,16 @@ const requireOtpVerified = require("./middleware/requireOtpVerified");
 
 const app = express();
 
-app.use(helmet());
-app.use(cors());
+if (env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
+
+app.use(cors(corsOptions));
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  }),
+);
 app.use(express.json({ limit: "2mb" }));
 app.use(requestId);
 
@@ -150,6 +159,11 @@ if (require.main === module) {
   const PORT = env.PORT || 3000;
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    if (allowedOrigins.length) {
+      console.log(`CORS allowed origins: ${allowedOrigins.join(", ")}`);
+    } else {
+      console.warn("CORS: no allowed origins configured — set CORS_ORIGINS or APP_BASE_URL");
+    }
   });
 }
 
