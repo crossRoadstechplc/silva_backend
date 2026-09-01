@@ -25,8 +25,16 @@ module.exports = {
   CORS_ORIGINS: process.env.CORS_ORIGINS || "",
   MAIL_FROM: process.env.MAIL_FROM || "CropFort <onboarding@cropfort.local>",
   SMTP_HOST: process.env.SMTP_HOST || "",
-  SMTP_PORT: Number(process.env.SMTP_PORT || 587),
-  SMTP_SECURE: process.env.SMTP_SECURE === "true",
+  SMTP_PORT: (() => {
+    const port = Number(process.env.SMTP_PORT || 587);
+    return Number.isFinite(port) ? port : 587;
+  })(),
+  SMTP_SECURE: (() => {
+    if (process.env.SMTP_SECURE === "true") return true;
+    if (process.env.SMTP_SECURE === "false") return false;
+    const port = Number(process.env.SMTP_PORT || 587);
+    return port === 465;
+  })(),
   SMTP_USER: process.env.SMTP_USER || "",
   SMTP_PASS: process.env.SMTP_PASS || "",
   RESEND_API_KEY: process.env.RESEND_API_KEY || "",
