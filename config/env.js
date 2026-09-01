@@ -20,8 +20,10 @@ module.exports = {
   RATE_LIMIT_WINDOW_MS: Number(process.env.RATE_LIMIT_WINDOW_MS || 900000),
   RATE_LIMIT_MAX: Number(process.env.RATE_LIMIT_MAX || 20),
   CROPFORT_OTP_ON_LOGIN: process.env.CROPFORT_OTP_ON_LOGIN !== "false",
+  /** Trust X-Forwarded-* from nginx (required on VPS). Set TRUST_PROXY=false for local dev without a proxy. */
+  TRUST_PROXY: process.env.TRUST_PROXY === "false" ? false : Number(process.env.TRUST_PROXY || 1),
   APP_BASE_URL: process.env.APP_BASE_URL || process.env.CLIENT_URL || "http://localhost:3000",
-  /** Comma-separated browser origins allowed for CORS (e.g. https://farm.spxafrica.com) */
+  /** Comma-separated browser origins allowed for CORS (e.g. https://www.cropfort.com) */
   CORS_ORIGINS: process.env.CORS_ORIGINS || "",
   MAIL_FROM: process.env.MAIL_FROM || "CropFort <onboarding@cropfort.local>",
   SMTP_HOST: process.env.SMTP_HOST || "",
@@ -35,8 +37,8 @@ module.exports = {
     const port = Number(process.env.SMTP_PORT || 587);
     return port === 465;
   })(),
-  SMTP_USER: process.env.SMTP_USER || "",
-  SMTP_PASS: process.env.SMTP_PASS || "",
+  SMTP_USER: (process.env.SMTP_USER || "").trim(),
+  SMTP_PASS: (process.env.SMTP_PASS || "").trim(),
   RESEND_API_KEY: process.env.RESEND_API_KEY || "",
   MAIL_TEST_TO: process.env.MAIL_TEST_TO || "",
   /** When true, all mail goes to MAIL_TEST_TO instead of the real recipient (dev only). */

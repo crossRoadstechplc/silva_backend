@@ -24,6 +24,7 @@ function getTransporter() {
       },
       tls: {
         minVersion: "TLSv1.2",
+        servername: env.SMTP_HOST,
       },
     });
   }

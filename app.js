@@ -54,8 +54,8 @@ const requireOtpVerified = require("./middleware/requireOtpVerified");
 
 const app = express();
 
-if (env.NODE_ENV === "production") {
-  app.set("trust proxy", 1);
+if (env.TRUST_PROXY !== false) {
+  app.set("trust proxy", env.TRUST_PROXY);
 }
 
 app.use(cors(corsOptions));
