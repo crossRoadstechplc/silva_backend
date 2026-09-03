@@ -119,24 +119,64 @@ async function silvaOwnerPayload(year, programId, farmEstateId = null, ownerOrga
 }
 
 async function buildEstateMap(programId, farmEstateId, ownerOrganizationId = null) {
-  const estate = await prisma.farm_estates.findFirst({
+  if (farmEstateId) {
+    const estate = await prisma.farm_estates.findFirst({
+      where: {
+        programId,
+        status: "active",
+        id: farmEstateId,
+      },
+      include: {
+        blocks: { orderBy: { code: "asc" } },
+      },
+    });
+    if (!estate) {
+      return buildEstateMap(programId, null, ownerOrganizationId);
+    }
+    return finalizeEstateMap(estate, estate.blocks);
+  }
+
+  const estates = await prisma.farm_estates.findMany({
     where: {
       programId,
       status: "active",
-      ...(farmEstateId ? { id: farmEstateId } : {}),
-      ...(ownerOrganizationId && !farmEstateId ? { ownerOrganizationId } : {}),
+      ...(ownerOrganizationId ? { ownerOrganizationId } : {}),
     },
     include: {
       blocks: { orderBy: { code: "asc" } },
     },
     orderBy: { name: "asc" },
   });
-  if (!estate && farmEstateId) {
-    return buildEstateMap(programId, null);
-  }
-  if (!estate) return null;
+  if (!estates.length) return null;
 
-  const blockIds = estate.blocks.map((b) => b.id);
+  if (estates.length === 1) {
+    return finalizeEstateMap(estates[0], estates[0].blocks);
+  }
+
+  const blocks = estates.flatMap((estate) =>
+    estate.blocks.map((block) => ({
+      ...block,
+      // Keep codes unique across estates on the combined map
+      code: `${estate.name?.split(/\s+/)[0] || estate.id.slice(0, 4)}/${block.code}`,
+      label: `${estate.name} · ${block.label || block.code}`,
+    })),
+  );
+
+  const totalAreaHa = estates.reduce((sum, e) => sum + (e.totalAreaHa != null ? Number(e.totalAreaHa) : 0), 0);
+
+  return finalizeEstateMap(
+    {
+      id: "all",
+      name: "All estates",
+      location: `${estates.length} farms`,
+      totalAreaHa: totalAreaHa || null,
+    },
+    blocks,
+  );
+}
+
+async function finalizeEstateMap(estate, rawBlocks) {
+  const blockIds = rawBlocks.map((b) => b.id);
   const assignments = blockIds.length
     ? await prisma.work_order_block_assignments.findMany({
         where: { blockId: { in: blockIds } },
@@ -152,7 +192,7 @@ async function buildEstateMap(programId, farmEstateId, ownerOrganizationId = nul
     if (!latestByBlock[row.blockId]) latestByBlock[row.blockId] = row.workOrder;
   }
 
-  const blocks = estate.blocks.map((block) => {
+  const blocks = rawBlocks.map((block) => {
     const wo = latestByBlock[block.id] || null;
     let health = "on_track";
     if (wo) {
@@ -171,8 +211,7 @@ async function buildEstateMap(programId, farmEstateId, ownerOrganizationId = nul
     };
   });
 
-  // Stable demo climate for field overview (no weather feed yet).
-  const seed = Array.from(estate.id).reduce((s, c) => s + c.charCodeAt(0), 0);
+  const seed = Array.from(String(estate.id)).reduce((s, c) => s + c.charCodeAt(0), 0);
   const climate = {
     tempC: Math.round((18 + (seed % 80) / 10) * 10) / 10,
     humidityPct: 55 + (seed % 30),

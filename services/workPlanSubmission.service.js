@@ -382,7 +382,7 @@ exports.accept = async (id, user, body = {}) => {
   }
   const parsedCheck = body.parsedJson || row.parsedJson || {};
   if (!parsedCheck.categories?.length && !parsedCheck.sections?.length) {
-    throw new AppError(400, "INCOMPLETE", "Add plan activities before promoting to AFP.");
+    throw new AppError(400, "INCOMPLETE", "Add plan activities before creating Annual plan drafts.");
   }
 
   let parsed = row.parsedJson;
@@ -394,10 +394,23 @@ exports.accept = async (id, user, body = {}) => {
     });
   }
 
+  const planYear = body.year || row.budgetYearGc;
   const promoteResult = await workPlanPromote.promoteSubmission(
     { ...row, parsedJson: parsed },
-    { createdByUserId: user.id, year: body.year || row.budgetYearGc },
+    { createdByUserId: user.id, year: planYear },
   );
+
+  const nextParsed = {
+    ...(parsed || {}),
+    cropfortPromote: {
+      at: new Date().toISOString(),
+      planYear: promoteResult.planYear,
+      blockLineIds: promoteResult.blockLineIds,
+      annualPlanLines: promoteResult.annualPlanLines,
+      activities: promoteResult.activities,
+      blocks: promoteResult.blocks,
+    },
+  };
 
   const updated = await prisma.work_plan_submissions.update({
     where: { id },
@@ -405,8 +418,11 @@ exports.accept = async (id, user, body = {}) => {
       status: "accepted",
       reviewedAt: new Date(),
       reviewedByUserId: user.id,
-      reviewNotes: body.notes || "Accepted and promoted to AFP catalog.",
+      reviewNotes:
+        body.notes ||
+        `Accepted — created ${promoteResult.annualPlanLines} draft Annual plan line(s). Elect and submit on Annual plan.`,
       promotedAt: new Date(),
+      parsedJson: nextParsed,
     },
     include: submissionInclude,
   });
