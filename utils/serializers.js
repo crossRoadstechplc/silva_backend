@@ -68,9 +68,25 @@ function afpJson(row, actor) {
 }
 
 function afeJson(row) {
+  const blockLine = row.afpBlockLine;
   return {
     id: row.id,
     afpLineId: row.afpLineId,
+    afpBlockLineId: row.afpBlockLineId ?? null,
+    afpBlockLine: blockLine
+      ? {
+          id: blockLine.id,
+          planYear: blockLine.planYear,
+          blockId: blockLine.blockId,
+          blockCode: blockLine.block?.code ?? null,
+          blockLabel: blockLine.block?.label ?? null,
+          activityId: blockLine.activityId,
+          activityCode: blockLine.activity?.code ?? null,
+          activityName: blockLine.activity?.name ?? null,
+          plannedQty: blockLine.plannedQty != null ? Number(blockLine.plannedQty) : null,
+          status: blockLine.status,
+        }
+      : null,
     operatingDiscipline: row.operatingDiscipline,
     description: row.description,
     estimatedCostEtb: money(row.estimatedCostUsd),

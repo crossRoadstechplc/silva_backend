@@ -17,7 +17,7 @@ const auditCropfort = require("./auditCropfort.service");
 const { requireProgramId } = require("../utils/programScope");
 
 const lineInclude = {
-  block: { select: { id: true, code: true, label: true } },
+  block: { select: { id: true, code: true, label: true, farmEstateId: true } },
   activity: {
     select: {
       id: true,
@@ -26,6 +26,11 @@ const lineInclude = {
       laborNorm: true,
       materialNorm: true,
       serviceNorm: true,
+      laborWageEtb: true,
+      laborCostPerUnit: true,
+      materialRateCode: true,
+      serviceRateCode: true,
+      template: { select: { category: true, unitOfMeasure: true } },
     },
   },
 };

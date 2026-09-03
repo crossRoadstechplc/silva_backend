@@ -122,12 +122,18 @@ const afpCreate = z.object({
   kpiTarget: z.string().min(1),
   notes: z.string().nullable().optional(),
 });
-const afeCreate = z.object({
-  afpLineId: z.string().min(1),
-  operatingDiscipline: z.string().min(1),
-  description: z.string().min(1),
-  estimatedCostEtb: z.number().positive(),
-});
+const afeCreate = z
+  .object({
+    afpBlockLineId: z.string().min(1).optional(),
+    afpLineId: z.string().min(1).optional(),
+    operatingDiscipline: z.string().min(1),
+    description: z.string().min(1),
+    estimatedCostEtb: z.number().positive(),
+  })
+  .refine((v) => Boolean(v.afpBlockLineId || v.afpLineId), {
+    message: "Select an annual plan line (or legacy budget envelope)",
+    path: ["afpBlockLineId"],
+  });
 const coaCreate = z.object({
   sourceAccount: z.string().min(1),
   glAccount: z.string().min(1),

@@ -73,6 +73,6 @@ exports.closeAfe = catchAsync(async (req, res) => {
   res.json({ data });
 });
 exports.afeHistory = catchAsync(async (req, res) => {
-  const data = await afeService.getHistory(req.params.afeId);
+  const data = await afeService.getHistory(req.params.afeId, req.user);
   res.json({ data });
 });

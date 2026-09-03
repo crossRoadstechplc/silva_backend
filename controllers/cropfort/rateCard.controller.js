@@ -6,6 +6,16 @@ exports.list = catchAsync(async (req, res) => {
   res.json({ data });
 });
 
+exports.listLabor = catchAsync(async (req, res) => {
+  const data = await rateCardService.listLaborRateCards(req.user, req.query);
+  res.json({ data });
+});
+
+exports.meta = catchAsync(async (req, res) => {
+  const data = await rateCardService.getMeta(req.user);
+  res.json({ data });
+});
+
 exports.create = catchAsync(async (req, res) => {
   const data = await rateCardService.create(req.user, req.validatedBody);
   res.status(201).json({ data });

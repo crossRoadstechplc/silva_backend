@@ -185,10 +185,10 @@ exports.issue = async (id, user) => {
   }
 
   const updated = await transition(id, "draft", "issued");
-  if (wo.afe.status === "approved") {
+  if (wo.afe?.status === "approved") {
     await prisma.afes.update({ where: { id: wo.afeId }, data: { status: "active" } });
   }
-  if (wo.afe.afp.status === "approved") {
+  if (wo.afe?.afpLineId && wo.afe?.afp?.status === "approved") {
     await prisma.afp_lines.update({ where: { id: wo.afe.afpLineId }, data: { status: "active" } });
   }
   await notify.workOrderIssued(updated);

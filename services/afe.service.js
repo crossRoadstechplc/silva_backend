@@ -1,12 +1,33 @@
 const prisma = require("../config/database");
 const AppError = require("../utils/AppError");
 const computeBand = require("./utils/computeBand");
-const { nextTextId } = require("../utils/ids");
+const { nextTextId, nextAfpId } = require("../utils/ids");
 const { decimal, parseListQuery, meta } = require("../utils/helpers");
 const { afeJson, auditJson } = require("../utils/serializers");
 const { isVendorRole, isSpxRole } = require("../utils/roles");
 const notify = require("./workflowNotifications.service");
 const { scopedWhere, programCreateData, requireProgramId } = require("./utils/programScope");
+const budgetService = require("./cropfort/budget.service");
+
+const afeInclude = {
+  afpBlockLine: {
+    include: {
+      block: { select: { id: true, code: true, label: true } },
+      activity: { select: { id: true, code: true, name: true, template: { select: { category: true } } } },
+    },
+  },
+};
+
+function mapDiscipline(category) {
+  if (!category) return "Agronomy";
+  const c = String(category).toLowerCase();
+  if (c.includes("process")) return "Processing";
+  if (c.includes("infra")) return "Infrastructure";
+  if (c.includes("environ")) return "Environment";
+  if (c.includes("social")) return "Social";
+  if (c.includes("admin")) return "General Admin";
+  return "Agronomy";
+}
 
 async function getThresholds(programId) {
   const rows = await prisma.schedule3_thresholds.findMany({ where: { programId } });
@@ -29,17 +50,18 @@ exports.findAll = async (query, user) => {
   if (statuses.length) where.status = { in: statuses };
   if (query.band) where.band = query.band;
   if (query.afpLineId) where.afpLineId = query.afpLineId;
+  if (query.afpBlockLineId) where.afpBlockLineId = query.afpBlockLineId;
   if (query.silvaApprovalRequired === "true") where.silvaApprovalRequired = true;
   if (query.silvaApprovalRequired === "false") where.silvaApprovalRequired = false;
   const [rows, total] = await Promise.all([
-    prisma.afes.findMany({ where, skip, take, orderBy: { createdAt: "desc" } }),
+    prisma.afes.findMany({ where, skip, take, orderBy: { createdAt: "desc" }, include: afeInclude }),
     prisma.afes.count({ where }),
   ]);
   return { items: rows.map(afeJson), meta: meta(page, pageSize, total) };
 };
 
 exports.findOne = async (id, user) => {
-  const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }) });
+  const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }), include: afeInclude });
   if (!afe) throw new AppError(404, "NOT_FOUND", "AFE not found");
   if (isVendorRole(user.role) && afe.createdByUserId !== user.id) {
     throw new AppError(404, "NOT_FOUND", "AFE not found");
@@ -49,23 +71,105 @@ exports.findOne = async (id, user) => {
 
 exports.create = async (dto, user) => {
   const programId = requireProgramId(user);
-  const afp = await prisma.afp_lines.findFirst({ where: { id: dto.afpLineId, programId } });
-  if (!afp) throw new AppError(404, "NOT_FOUND", "AFP line not found.");
-  const thresholds = await getThresholds(programId);
-  const band = computeBand(dto.estimatedCostEtb, thresholds);
-  const silvaApprovalRequired = band === "C" || band === "D";
   const id = await nextTextId("afe", "AFE");
+
+  let afpLineId = dto.afpLineId || null;
+  let afpBlockLineId = dto.afpBlockLineId || null;
+  let operatingDiscipline = dto.operatingDiscipline;
+  let description = dto.description;
+  let estimatedCostEtb = Number(dto.estimatedCostEtb) || 0;
+
+  if (afpBlockLineId) {
+    const blockLine = await prisma.afp_block_lines.findFirst({
+      where: { id: afpBlockLineId, programId, status: "approved" },
+      include: {
+        block: { select: { id: true, code: true, label: true, farmEstateId: true } },
+        activity: {
+          include: { template: { select: { category: true } } },
+        },
+      },
+    });
+    if (!blockLine) {
+      throw new AppError(404, "NOT_FOUND", "Approved annual plan line not found.");
+    }
+    if (blockLine.electionStatus !== "elected") {
+      throw new AppError(
+        422,
+        "BUSINESS_RULE_VIOLATION",
+        "Elect this annual plan line before creating a commitment (Rate card → Annual plan → Commitments).",
+      );
+    }
+
+    const { costs } = await budgetService.costForAfpBlockLine(blockLine, programId);
+    if (!(estimatedCostEtb > 0)) {
+      estimatedCostEtb = costs.totalCostEtb;
+    }
+    if (!(estimatedCostEtb > 0)) {
+      const hint = costs.warnings?.length ? ` ${costs.warnings.join(" ")}` : "";
+      throw new AppError(
+        422,
+        "BUSINESS_RULE_VIOLATION",
+        `No Rate card–derived cost for this line. Approve Rate card rates and activity norms/qty.${hint}`,
+      );
+    }
+
+    const blockLabel = blockLine.block?.label || blockLine.block?.code || blockLine.blockId;
+    const activityLabel = blockLine.activity
+      ? `${blockLine.activity.code} — ${blockLine.activity.name}`
+      : blockLine.activityId;
+
+    if (!operatingDiscipline?.trim()) {
+      operatingDiscipline = mapDiscipline(blockLine.activity?.template?.category);
+    }
+    if (!description?.trim()) {
+      description = `${blockLabel}: ${activityLabel} (${blockLine.planYear})`;
+    }
+
+    const bridgeId = await nextAfpId(blockLine.planYear);
+    await prisma.afp_lines.create({
+      data: programCreateData(user, {
+        id: bridgeId,
+        year: blockLine.planYear,
+        operatingDiscipline,
+        activity: description,
+        budgetAllocatedUsd: decimal(estimatedCostEtb),
+        budgetAllocatedEtb: decimal(estimatedCostEtb),
+        kpiTarget: `Block AFP ${blockLine.id}`,
+        notes: `Auto envelope for annual plan line ${blockLine.id}`,
+        status: "approved",
+        silvaApproved: true,
+        approvalDate: new Date(),
+        createdByUserId: user.id,
+      }),
+    });
+    afpLineId = bridgeId;
+  } else if (afpLineId) {
+    const afp = await prisma.afp_lines.findFirst({ where: { id: afpLineId, programId } });
+    if (!afp) throw new AppError(404, "NOT_FOUND", "AFP line not found.");
+    if (!(estimatedCostEtb > 0)) {
+      throw new AppError(400, "VALIDATION_ERROR", "Estimated cost must be positive.");
+    }
+  } else {
+    throw new AppError(400, "VALIDATION_ERROR", "Select an annual plan line.");
+  }
+
+  const thresholds = await getThresholds(programId);
+  const band = computeBand(estimatedCostEtb, thresholds);
+  const silvaApprovalRequired = band === "C" || band === "D";
+
   const afe = await prisma.afes.create({
     data: programCreateData(user, {
       id,
-      afpLineId: dto.afpLineId,
-      operatingDiscipline: dto.operatingDiscipline,
-      description: dto.description,
-      estimatedCostUsd: decimal(dto.estimatedCostEtb),
+      afpLineId,
+      afpBlockLineId,
+      operatingDiscipline,
+      description,
+      estimatedCostUsd: decimal(estimatedCostEtb),
       band,
       silvaApprovalRequired,
       createdByUserId: user.id,
     }),
+    include: afeInclude,
   });
   return afeJson(afe);
 };
@@ -89,22 +193,23 @@ exports.update = async (id, dto, user) => {
       band,
       silvaApprovalRequired: band === "C" || band === "D",
     },
+    include: afeInclude,
   });
   return afeJson(updated);
 };
 
 exports.submit = async (id, user) => {
-  const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }) });
+  const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }), include: afeInclude });
   if (!afe) throw new AppError(404, "NOT_FOUND", "AFE not found");
   if (afe.status === "submitted") return afeJson(afe);
   if (afe.status !== "draft") throw new AppError(400, "INVALID_STATE", "Workflow transition not allowed.");
-  const updated = await prisma.afes.update({ where: { id }, data: { status: "submitted" } });
+  const updated = await prisma.afes.update({ where: { id }, data: { status: "submitted" }, include: afeInclude });
   await notify.afeSubmitted(updated);
   return afeJson(updated);
 };
 
 exports.validate = async (id, user) => {
-  const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }) });
+  const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }), include: afeInclude });
   if (!afe) throw new AppError(404, "NOT_FOUND", "AFE not found");
   if (["validated", "approved", "active"].includes(afe.status) && afe.spxValidated) return afeJson(afe);
   if (afe.status !== "submitted") throw new AppError(400, "INVALID_STATE", "AFE must be submitted to validate.");
@@ -120,6 +225,7 @@ exports.validate = async (id, user) => {
   const updated = await prisma.afes.update({
     where: { id },
     data: { status: nextStatus, spxValidated: true, silvaApproved: false, approvalDate },
+    include: afeInclude,
   });
   if (afe.band === "B") {
     await notify.afePendingSilva(
@@ -136,7 +242,7 @@ exports.validate = async (id, user) => {
 };
 
 exports.approve = async (id, user) => {
-  const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }) });
+  const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }), include: afeInclude });
   if (!afe) throw new AppError(404, "NOT_FOUND", "AFE not found");
   if (afe.status === "approved" || afe.status === "active") return afeJson(afe);
 
@@ -156,6 +262,7 @@ exports.approve = async (id, user) => {
     const approved = await prisma.afes.update({
       where: { id },
       data: { status: "approved", silvaApproved: true, approvalDate: new Date() },
+      include: afeInclude,
     });
     await notify.afeApproved(approved);
     return afeJson(approved);
@@ -168,13 +275,14 @@ exports.approve = async (id, user) => {
   const approved = await prisma.afes.update({
     where: { id },
     data: { status: "approved", approvalDate: new Date() },
+    include: afeInclude,
   });
   await notify.afeApproved(approved);
   return afeJson(approved);
 };
 
 exports.reject = async (id, reason, user) => {
-  const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }) });
+  const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }), include: afeInclude });
   if (!afe) throw new AppError(404, "NOT_FOUND", "AFE not found");
   if (afe.status === "rejected") return afeJson(afe);
   const issuedWo = await prisma.work_orders.findFirst({ where: { afeId: id, status: { not: "draft" } } });
@@ -189,23 +297,23 @@ exports.reject = async (id, reason, user) => {
   } else if (!isSpxRole(user.role)) {
     throw new AppError(403, "FORBIDDEN", "Insufficient permissions");
   }
-  const updated = await prisma.afes.update({ where: { id }, data: { status: "rejected" } });
+  const updated = await prisma.afes.update({ where: { id }, data: { status: "rejected" }, include: afeInclude });
   await notify.afeRejected(updated);
   return afeJson(updated);
 };
 
 exports.close = async (id, user) => {
-  const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }) });
+  const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }), include: afeInclude });
   if (!afe) throw new AppError(404, "NOT_FOUND", "AFE not found");
   if (afe.status === "closed") return afeJson(afe);
   if (!["approved", "active"].includes(afe.status)) {
     throw new AppError(400, "INVALID_STATE", "Workflow transition not allowed.");
   }
-  const updated = await prisma.afes.update({ where: { id }, data: { status: "closed" } });
+  const updated = await prisma.afes.update({ where: { id }, data: { status: "closed" }, include: afeInclude });
   return afeJson(updated);
 };
 
-exports.getHistory = async (id) => {
+exports.getHistory = async (id, user) => {
   const afe = await prisma.afes.findFirst({ where: scopedWhere(user, { id }) });
   if (!afe) throw new AppError(404, "NOT_FOUND", "AFE not found");
   const rows = await prisma.audit_log.findMany({

@@ -33,6 +33,18 @@ router.get(
   rateCardController.list,
 );
 
+router.get(
+  "/rate-card/meta",
+  requireCropfortRole("spx_validator", "farm_owner", "spx_platform_admin"),
+  rateCardController.meta,
+);
+
+router.get(
+  "/labor-rate-cards",
+  requireCropfortRole("spx_validator", "farm_owner", "spx_platform_admin", "bagro_office", "field_manager"),
+  rateCardController.listLabor,
+);
+
 router.post(
   "/rate-card",
   requireCropfortRole("spx_validator", "spx_platform_admin"),

@@ -1,10 +1,9 @@
 const prisma = require("../../config/database");
-const AppError = require("../../utils/AppError");
 const { activityLineCosts } = require("../costDerivation.service");
 const { getApprovedRateByCode } = require("./rateMap.service");
+const { resolveLaborRate } = require("./resolveLaborRate.service");
 const cashFlowService = require("./cashFlow.service");
 const { requireProgramId } = require("../utils/programScope");
-const { isFarmOwner } = require("../../utils/cropfortRoles");
 
 function monthKey(date) {
   if (!date) return null;
@@ -17,9 +16,30 @@ function matchesMonth(plannedStart, budgetMonth) {
   return monthKey(plannedStart) === budgetMonth;
 }
 
+async function costForAfpBlockLine(line, programId) {
+  const farmEstateId = line.block?.farmEstateId || null;
+  const rateMap = await getApprovedRateByCode(programId, farmEstateId);
+  let activityForCost = line.activity;
+  if (farmEstateId && line.activityId) {
+    const labor = await resolveLaborRate(farmEstateId, line.activityId);
+    if (labor.rateEtb > 0) {
+      activityForCost = {
+        ...line.activity,
+        laborCostPerUnit: labor.rateEtb,
+        laborNorm: null,
+        laborWageEtb: null,
+      };
+    }
+  }
+  const qty = Number(line.plannedQty);
+  const costs = activityLineCosts(qty, activityForCost, rateMap);
+  return { qty, costs, farmEstateId };
+}
+
+exports.costForAfpBlockLine = costForAfpBlockLine;
+
 exports.preview = async (user, query) => {
   const programId = requireProgramId(user);
-  const farmOwner = await isFarmOwner(user.id, programId);
 
   if (query.farmEstateId && query.planYear) {
     const rollup = await cashFlowService.getBudgetRollup(user, query.farmEstateId, query.planYear);
@@ -39,13 +59,14 @@ exports.preview = async (user, query) => {
     };
   }
 
-  const rateMap = await getApprovedRateByCode(programId);
-
   const where = {
     programId,
     status: "approved",
-    electionStatus: "elected",
   };
+  // Default budget = elected only (annual program). Commitments can request all approved.
+  if (!(query.includeAllApproved === "true" || query.includeAllApproved === true)) {
+    where.electionStatus = "elected";
+  }
   if (query.planYear) where.planYear = Number(query.planYear);
   if (query.blockId) where.blockId = query.blockId;
 
@@ -53,7 +74,9 @@ exports.preview = async (user, query) => {
     where,
     include: {
       activity: { include: { template: true } },
-      block: { select: { id: true, code: true, label: true, areaHa: true, treeCount: true } },
+      block: {
+        select: { id: true, code: true, label: true, areaHa: true, treeCount: true, farmEstateId: true },
+      },
     },
     orderBy: [{ blockId: "asc" }, { sequence: "asc" }],
   });
@@ -65,26 +88,28 @@ exports.preview = async (user, query) => {
 
   for (const line of lines) {
     if (!matchesMonth(line.plannedStart, query.budgetMonth)) continue;
-    const qty = Number(line.plannedQty);
-    const costs = activityLineCosts(qty, line.activity, rateMap);
+    const { qty, costs } = await costForAfpBlockLine(line, programId);
     totalLabor += costs.laborCostEtb;
     totalMaterial += costs.materialCostEtb;
     totalService += costs.serviceCostEtb;
     rows.push({
       programId,
       planYear: line.planYear,
+      lineId: line.id,
       blockId: line.blockId,
       blockCode: line.block.code,
       blockLabel: line.block.label,
       activityId: line.activityId,
       activityCode: line.activity.code,
       activityName: line.activity.name,
+      electionStatus: line.electionStatus,
       budgetMonth: monthKey(line.plannedStart),
       plannedQty: qty,
       laborCostEtb: costs.laborCostEtb,
       materialCostEtb: costs.materialCostEtb,
       serviceCostEtb: costs.serviceCostEtb,
       totalCostEtb: costs.totalCostEtb,
+      warnings: costs.warnings,
     });
   }
 
@@ -94,10 +119,6 @@ exports.preview = async (user, query) => {
     serviceCostEtb: Number(totalService.toFixed(2)),
     totalCostEtb: Number((totalLabor + totalMaterial + totalService).toFixed(2)),
   };
-
-  if (farmOwner) {
-    return { rows, totals };
-  }
 
   return { rows, totals };
 };

@@ -777,6 +777,7 @@ model afes {
   id                    String          @id
   programId             String
   afpLineId             String?
+  afpBlockLineId        String?
   operatingDiscipline   String
   description           String
   estimatedCostUsd      Decimal         @db.Decimal(14, 2)
@@ -795,6 +796,7 @@ model afes {
 
   program               programs            @relation(fields: [programId], references: [id])
   afp                   afp_lines?          @relation(fields: [afpLineId], references: [id])
+  afpBlockLine          afp_block_lines?    @relation(fields: [afpBlockLineId], references: [id])
   createdBy             users               @relation(fields: [createdByUserId], references: [id])
   activityRequest       activity_requests?  @relation(fields: [activityRequestId], references: [id])
   workOrders            work_orders[]
@@ -803,6 +805,7 @@ model afes {
   @@index([programId, status, band])
   @@index([planningMode, origin])
   @@index([programId, planningMode])
+  @@index([afpBlockLineId])
 }
 
 model work_orders {
@@ -1929,6 +1932,7 @@ model afp_block_lines {
   createdBy  users             @relation("AfpBlockCreator", fields: [createdByUserId], references: [id])
   supersedes afp_block_lines?  @relation("AfpBlockVersion", fields: [supersedesId], references: [id])
   superseded afp_block_lines[] @relation("AfpBlockVersion")
+  afes       afes[]
 
   @@index([programId, planYear, blockId])
   @@index([programId, status])
