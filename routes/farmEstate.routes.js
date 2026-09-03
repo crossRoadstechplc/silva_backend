@@ -19,6 +19,7 @@ router.get("/:id", farmEstate.findOne);
 router.patch("/:id", requireRole(SPX), validate(schemas.farmEstateUpdate), auditLog("farm_estate"), farmEstate.update);
 router.put("/:id/vendors", requireRole(SPX), validate(schemas.farmEstateVendors), auditLog("farm_estate"), farmEstate.setVendors);
 router.post("/:id/blocks", requireRole(SPX), validate(schemas.farmBlockCreate), auditLog("farm_block"), farmEstate.addBlock);
+router.patch("/:id/blocks/:blockId", requireRole(SPX), validate(schemas.farmBlockUpdate), auditLog("farm_block"), farmEstate.updateBlock);
 router.delete("/:id/blocks/:blockId", requireRole(SPX), auditLog("farm_block"), farmEstate.removeBlock);
 
 module.exports = router;

@@ -1,6 +1,7 @@
 const prisma = require("../../config/database");
 const { uuid } = require("../../utils/ids");
-const { laborCost } = require("../costDerivation.service");
+const { activityLineCosts, hasLaborCosting } = require("../costDerivation.service");
+const { getApprovedRateByCode } = require("./rateMap.service");
 
 const HARD_BLOCKS = new Set(["rate_card_compliance", "election_compliance"]);
 
@@ -12,18 +13,6 @@ const CHECK_META = [
   { checkType: "afe_band_check", isHardBlock: false },
   { checkType: "materials_estimate", isHardBlock: false },
 ];
-
-async function getApprovedRateMap(programId) {
-  const lines = await prisma.rate_card_lines.findMany({
-    where: { programId, status: "approved" },
-    orderBy: [{ resourceCode: "asc" }, { version: "desc" }],
-  });
-  const map = new Map();
-  for (const line of lines) {
-    if (!map.has(line.resourceCode)) map.set(line.resourceCode, Number(line.rateEtb));
-  }
-  return map;
-}
 
 async function loadWeeklyTickets(weeklySubmissionId) {
   const links = await prisma.weekly_submission_tickets.findMany({
@@ -41,12 +30,30 @@ async function loadWeeklyTickets(weeklySubmissionId) {
 }
 
 async function checkRateCardCompliance(programId, tickets) {
-  const rateMap = await getApprovedRateMap(programId);
-  const missing = tickets.filter((t) => !rateMap.has(t.activity.code));
+  const rateMap = await getApprovedRateByCode(programId);
+  const missing = [];
+  for (const ticket of tickets) {
+    const activity = ticket.activity;
+    if (!activity) continue;
+    const needsMaterial =
+      activity.materialNorm != null &&
+      Number(activity.materialNorm) > 0 &&
+      activity.materialRateCode &&
+      !rateMap.has(activity.materialRateCode);
+    const needsService =
+      activity.serviceNorm != null &&
+      Number(activity.serviceNorm) > 0 &&
+      activity.serviceRateCode &&
+      !rateMap.has(activity.serviceRateCode);
+    const needsLabor = hasLaborCosting(activity) ? false : Number(activity.laborNorm || 0) > 0;
+    if (needsMaterial) missing.push(activity.materialRateCode);
+    if (needsService) missing.push(activity.serviceRateCode);
+    if (needsLabor) missing.push(`${activity.code} (labor)`);
+  }
   if (!missing.length) return { result: "pass", note: "All activities have approved rate card lines." };
   return {
     result: "fail",
-    note: `Missing approved rates for: ${[...new Set(missing.map((t) => t.activity.code))].join(", ")}`,
+    note: `Missing approved rates for: ${[...new Set(missing)].join(", ")}`,
   };
 }
 
@@ -123,12 +130,11 @@ async function checkAfeBand(programId, tickets) {
       cropfortAfeBandCMaxEtb: true,
     },
   });
-  const rateMap = await getApprovedRateMap(programId);
+  const rateMap = await getApprovedRateByCode(programId);
   let weekTotal = 0;
   for (const ticket of tickets) {
-    const rate = rateMap.get(ticket.activity.code) ?? 0;
-    const activity = await prisma.activity_master.findUnique({ where: { id: ticket.activityId } });
-    weekTotal += laborCost(ticket.actualQty, activity?.laborNorm, rate);
+    const costs = activityLineCosts(ticket.actualQty, ticket.activity, rateMap);
+    weekTotal += costs.totalCostEtb;
   }
   const bandC = Number(program?.cropfortAfeBandCMaxEtb ?? 5000000);
   if (weekTotal <= bandC) {

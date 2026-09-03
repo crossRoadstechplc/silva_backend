@@ -23,7 +23,7 @@ async function fxRate(programId) {
   return cfg ? Number(cfg.fxRateEtbPerUsd) : 57.2;
 }
 
-async function silvaOwnerPayload(year, programId, farmEstateId = null) {
+async function silvaOwnerPayload(year, programId, farmEstateId = null, ownerOrganizationId = null) {
   const afps = await prisma.afp_lines.findMany({ where: { year, programId } });
   const afes = await prisma.afes.findMany({
     where: { programId, silvaApprovalRequired: true, status: "validated" },
@@ -80,7 +80,7 @@ async function silvaOwnerPayload(year, programId, farmEstateId = null) {
     percent: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length),
   }));
 
-  const estateMap = await buildEstateMap(programId, farmEstateId);
+  const estateMap = await buildEstateMap(programId, farmEstateId, ownerOrganizationId);
 
   return {
     year,
@@ -118,12 +118,13 @@ async function silvaOwnerPayload(year, programId, farmEstateId = null) {
   };
 }
 
-async function buildEstateMap(programId, farmEstateId) {
+async function buildEstateMap(programId, farmEstateId, ownerOrganizationId = null) {
   const estate = await prisma.farm_estates.findFirst({
     where: {
       programId,
       status: "active",
       ...(farmEstateId ? { id: farmEstateId } : {}),
+      ...(ownerOrganizationId && !farmEstateId ? { ownerOrganizationId } : {}),
     },
     include: {
       blocks: { orderBy: { code: "asc" } },
@@ -275,7 +276,8 @@ exports.silvaOwner = async (user, query) => {
   }
   const year = Number(query.year) || new Date().getUTCFullYear();
   const farmEstateId = farmEstateScope.parseFarmEstateId(query);
-  return silvaOwnerPayload(year, requireProgramId(user), farmEstateId);
+  const ownerOrganizationId = isSilvaRole(user.role) ? user.organizationId : null;
+  return silvaOwnerPayload(year, requireProgramId(user), farmEstateId, ownerOrganizationId);
 };
 
 exports.spxManagement = async (user, query) => {

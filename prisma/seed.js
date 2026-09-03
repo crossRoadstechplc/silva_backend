@@ -148,7 +148,8 @@ async function main() {
       slug: "shecha-estate",
       createdByOrgId: spx.id,
       brandingJson: { tagline: "Kaffa Zone turnaround" },
-      cropfortHectareContractTotal: 220,
+      // Chaka Buna alone is 230 ha (20 blocks x 11.5 ha) per the Master sheet.
+      cropfortHectareContractTotal: 230,
       cropfortOpexReserveBalanceEtb: 15000000,
     },
   });
@@ -174,53 +175,6 @@ async function main() {
       insuranceExpiry: new Date("2026-12-31T00:00:00.000Z"),
       status: "active",
       isDefaultExecutionPartner: true,
-    },
-  });
-
-  const estateBlocks = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
-  await prisma.farm_estates.create({
-    data: {
-      id: "fest_chetu",
-      programId: program.id,
-      ownerOrganizationId: silva.id,
-      name: "Chetu Farm",
-      totalAreaHa: 128.94,
-      location: "Kaffa Zone",
-      notes: "Primary B-Agro execution estate",
-      status: "active",
-      vendorMaps: {
-        create: { id: "fev_bagro_chetu", vendorId: bagro.id, isPrimary: true },
-      },
-      blocks: {
-        create: estateBlocks.map((code) => ({
-          id: `blk_chetu_${code.toLowerCase()}`,
-          programId: program.id,
-          code,
-          label: `Block ${code}`,
-        })),
-      },
-    },
-  });
-  await prisma.farm_estates.create({
-    data: {
-      id: "fest_shecha",
-      programId: program.id,
-      ownerOrganizationId: silva.id,
-      name: "Shecha Estate",
-      totalAreaHa: 210,
-      location: "Shecha",
-      status: "active",
-      vendorMaps: {
-        create: { id: "fev_bagro_shecha", vendorId: bagro.id, isPrimary: false },
-      },
-      blocks: {
-        create: ["A", "B", "C", "D", "E", "F", "G"].map((code) => ({
-          id: `blk_shecha_${code.toLowerCase()}`,
-          programId: program.id,
-          code,
-          label: `Block ${code}`,
-        })),
-      },
     },
   });
 
@@ -263,6 +217,20 @@ async function main() {
   await user("usr_bagro_super", "B-Agro Supervisor", "supervisor@bagro.example", "vendor_supervisor", bagroOrg.id, bagro.id);
   await user("usr_bagro_worker", "B-Agro Worker", "worker@bagro.example", "vendor_worker", bagroOrg.id, bagro.id);
   await user("usr_highland_admin", "Highland Admin", "admin@highland.example", "vendor_admin", highlandOrg.id, "vnd_highland");
+
+  try {
+    const { importCropfortFieldOsAndFarms } = require("../lib/cropfortFieldOsSeed");
+    const imported = await importCropfortFieldOsAndFarms(prisma, {
+      programId: program.id,
+      silvaOrgId: silva.id,
+      bagroVendorId: bagro.id,
+      createdByUserId: principal.id,
+    });
+    console.log("Cropfort Field OS catalog:", imported.catalog);
+    console.log("B-Agro farm portfolio:", imported.farms);
+  } catch (e) {
+    console.warn("Cropfort Field OS import skipped:", e.message);
+  }
 
   await prisma.schedule3_thresholds.createMany({
     data: [
@@ -797,76 +765,6 @@ async function main() {
     });
   } catch (e) {
     console.warn("Cropfort roles seed skipped:", e.message);
-  }
-
-  try {
-    await prisma.activity_templates.createMany({
-      data: [
-        {
-          id: "atpl_prune",
-          code: "PRUNE-01",
-          name: "Primary pruning",
-          category: "Pruning",
-          unitOfMeasure: "tree",
-        },
-        {
-          id: "atpl_fert",
-          code: "FERT-01",
-          name: "Fertilizer application",
-          category: "Nutrition",
-          unitOfMeasure: "ha",
-        },
-        {
-          id: "atpl_weed",
-          code: "WEED-01",
-          name: "Weeding",
-          category: "Weed control",
-          unitOfMeasure: "ha",
-        },
-        {
-          id: "atpl_harv",
-          code: "HARV-01",
-          name: "Cherry harvest",
-          category: "Harvest",
-          unitOfMeasure: "kg",
-        },
-      ],
-      skipDuplicates: true,
-    });
-    await prisma.activity_master.createMany({
-      data: [
-        {
-          id: "act_prune",
-          programId: program.id,
-          templateId: "atpl_prune",
-          code: "PRUNE-01",
-          name: "Primary pruning",
-          laborNorm: 0.25,
-          materialNorm: 0.05,
-        },
-        {
-          id: "act_fert",
-          programId: program.id,
-          templateId: "atpl_fert",
-          code: "FERT-01",
-          name: "Fertilizer application",
-          laborNorm: 0.4,
-          materialNorm: 1.2,
-        },
-        {
-          id: "act_weed",
-          programId: program.id,
-          templateId: "atpl_weed",
-          code: "WEED-01",
-          name: "Weeding",
-          laborNorm: 0.6,
-          materialNorm: 0.1,
-        },
-      ],
-      skipDuplicates: true,
-    });
-  } catch (e) {
-    console.warn("Cropfort activity seed skipped:", e.message);
   }
 
   try {

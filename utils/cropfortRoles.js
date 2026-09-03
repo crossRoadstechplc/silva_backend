@@ -2,22 +2,24 @@ const prisma = require("../config/database");
 
 const CROPFORT_ROLES = [
   "field_supervisor",
+  "field_manager",
   "bagro_office",
   "spx_validator",
   "farm_owner",
+  "farm_owner_viewer",
   "spx_platform_admin",
 ];
 
 const FIELD_OS_TO_CROPFORT = {
   silva_owner: "farm_owner",
   silva_country_manager: "farm_owner",
-  silva_finance: "farm_owner",
+  silva_finance: "farm_owner_viewer",
   spx_principal: "spx_validator",
   spx_account_handler: "spx_validator",
   spx_field_supervisor: "spx_validator",
   system_admin: "spx_platform_admin",
   vendor_admin: "bagro_office",
-  vendor_manager: "bagro_office",
+  vendor_manager: "field_manager",
   vendor_supervisor: "bagro_office",
   vendor_field_lead: "field_supervisor",
   vendor_worker: "field_supervisor",

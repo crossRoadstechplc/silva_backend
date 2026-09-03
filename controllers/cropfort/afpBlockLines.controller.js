@@ -39,3 +39,8 @@ exports.returnLine = catchAsync(async (req, res) => {
   const data = await afpBlockLinesService.returnLine(req.user, req.params.lineId, req.validatedBody.comment);
   res.json({ data });
 });
+
+exports.reopenLine = catchAsync(async (req, res) => {
+  const data = await afpBlockLinesService.reopenLine(req.user, req.params.lineId);
+  res.json({ data });
+});

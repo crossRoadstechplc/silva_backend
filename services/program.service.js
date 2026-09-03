@@ -151,6 +151,10 @@ exports.inviteOrganization = async (user, programId, dto) => {
         roleInProgram: dto.roleInProgram || "executor",
       },
     });
+    await prisma.users.updateMany({
+      where: { organizationId: toOrg.id, activeProgramId: null },
+      data: { activeProgramId: programId },
+    });
     await prisma.program_org_invites.update({
       where: { id: invite.id },
       data: { status: "accepted" },

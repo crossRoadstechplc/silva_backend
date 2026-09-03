@@ -1,34 +1,17 @@
 const prisma = require("../../config/database");
-const { laborCost, materialCost } = require("../costDerivation.service");
+const { activityLineCosts } = require("../costDerivation.service");
+const { getApprovedRateByCode } = require("./rateMap.service");
 const { requireProgramId } = require("../utils/programScope");
 const { isFarmOwner } = require("../../utils/cropfortRoles");
 
-async function getApprovedRateByCode(programId) {
-  const lines = await prisma.rate_card_lines.findMany({
-    where: { programId, status: "approved" },
-    orderBy: [{ resourceCode: "asc" }, { version: "desc" }],
-  });
-  const map = new Map();
-  for (const line of lines) {
-    if (!map.has(line.resourceCode)) {
-      map.set(line.resourceCode, Number(line.rateEtb));
-    }
-  }
-  return map;
-}
-
 function ticketCostEtb(ticket, rateMap) {
-  const rate = rateMap.get(ticket.activity?.code) ?? 0;
-  const labor = laborCost(ticket.actualQty, ticket.activity?.laborNorm, rate);
-  const material = materialCost(ticket.actualQty, ticket.activity?.materialNorm, rate);
-  return Number((labor + material).toFixed(2));
+  const costs = activityLineCosts(ticket.actualQty, ticket.activity, rateMap);
+  return costs.totalCostEtb;
 }
 
 function budgetLineCost(line, rateMap) {
-  const rate = rateMap.get(line.activity?.code) ?? 0;
-  const labor = laborCost(line.plannedQty, line.activity?.laborNorm, rate);
-  const material = materialCost(line.plannedQty, line.activity?.materialNorm, rate);
-  return Number((labor + material).toFixed(2));
+  const costs = activityLineCosts(line.plannedQty, line.activity, rateMap);
+  return costs.totalCostEtb;
 }
 
 function variancePct(budget, actual) {

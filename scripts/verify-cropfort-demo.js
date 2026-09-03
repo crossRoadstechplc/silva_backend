@@ -65,14 +65,15 @@ async function main() {
   const rcSpx = await api(principal, "GET", "/cropfort/rate-card");
   check("SPX lists rate card", rcSpx.status === 200, `status=${rcSpx.status}`);
   const rcLines = rcSpx.json?.data ?? [];
-  check("Demo has approved rate line", countByStatus(rcLines, "approved") >= 1);
+  check("Catalog has 20 approved MAT/SVC lines", countByStatus(rcLines, "approved") >= 20);
+  check("MAT-001 rate line present", rcLines.some((l) => l.resourceCode === "MAT-001"));
   check("Demo has draft rate line", countByStatus(rcLines, "draft") >= 1);
 
   const rcSilva = await api(silva, "GET", "/cropfort/rate-card?status=submitted");
   check("Silva lists submitted rate lines", rcSilva.status === 200, `status=${rcSilva.status}`);
   check(
-    "Silva approval queue has FERT-01",
-    (rcSilva.json?.data ?? []).some((l) => l.resourceCode === "FERT-01"),
+    "Silva approval queue has demo submitted line",
+    (rcSilva.json?.data ?? []).some((l) => l.resourceCode === "MAT-DEMO-SUBMIT"),
   );
 
   const rcSilvaDefault = await api(silva, "GET", "/cropfort/rate-card");
@@ -153,12 +154,42 @@ async function main() {
   check("Admin tenant config", tenantConfig.status === 200);
   check("Admin lists users", (await api(admin, "GET", "/cropfort/admin/users")).status === 200);
 
+  const estatesSpx = await api(principal, "GET", "/farm-estates?pageSize=50");
+  check("SPX lists farm estates", estatesSpx.status === 200);
+  const spxEstates = estatesSpx.json?.data?.items ?? estatesSpx.json?.data ?? [];
+  check("SPX sees 7 B-Agro farms", spxEstates.length >= 7, `count=${spxEstates.length}`);
+
+  const estatesSilva = await api(silva, "GET", "/farm-estates?pageSize=50");
+  check("Silva lists farm estates", estatesSilva.status === 200);
+  const silvaEstates = estatesSilva.json?.data?.items ?? estatesSilva.json?.data ?? [];
+  check("Silva sees only Chaka Buna", silvaEstates.length === 1 && silvaEstates[0]?.id === "fest_chaka_buna");
+
+  const workflow = await api(principal, "GET", "/cropfort/farms/fest_chaka_buna/workflow");
+  check("Farm workflow journey", workflow.status === 200);
+  check(
+    "Workflow has 10 stages",
+    (workflow.json?.data?.stages ?? []).length === 10,
+    `count=${(workflow.json?.data?.stages ?? []).length}`,
+  );
+
+  const actLand = await api(principal, "GET", "/cropfort/activity-master?search=T1-001");
+  const landId = (actLand.json?.data ?? []).find((a) => a.code === "T1-001")?.id;
+  const estimate = await api(bagro, "POST", "/cropfort/budget/estimate", {
+    blockIds: ["blk_chaka_blk_001"],
+    activityIds: landId ? [landId] : [],
+  });
+  check("Budget estimate for T1-001 on Chaka block", estimate.status === 200, `status=${estimate.status}`);
+  if (estimate.status === 200) {
+    const total = estimate.json?.data?.totals?.totalCostEtb;
+    check("T1-001 labor ~ order of magnitude", total != null && total > 10000, `total=${total}`);
+  }
+
   const sync = await api(bagro, "POST", "/cropfort/block-field-tickets/sync", {
     tickets: [
       {
         clientLocalId: "demo-sync-1",
-        blockId: "blk_shecha_a",
-        activityId: "act_prune",
+        blockId: "blk_chaka_blk_001",
+        activityId: landId || "act_t1_001",
         weekEnding: DEMO_WEEK,
         actualQty: 12,
         laborHoursActual: 6,
@@ -171,8 +202,8 @@ async function main() {
     tickets: [
       {
         clientLocalId: "demo-sync-1",
-        blockId: "blk_shecha_a",
-        activityId: "act_prune",
+        blockId: "blk_chaka_blk_001",
+        activityId: landId || "act_t1_001",
         weekEnding: DEMO_WEEK,
         actualQty: 12,
         laborHoursActual: 6,

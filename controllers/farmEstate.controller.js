@@ -31,6 +31,16 @@ exports.addBlock = catchAsync(async (req, res) => {
   res.status(201).json({ data });
 });
 
+exports.updateBlock = catchAsync(async (req, res) => {
+  const data = await farmEstate.updateBlock(
+    req.params.id,
+    req.params.blockId,
+    req.body,
+    req.user,
+  );
+  res.json({ data });
+});
+
 exports.removeBlock = catchAsync(async (req, res) => {
   const data = await farmEstate.removeBlock(req.params.id, req.params.blockId, req.user);
   res.json({ data });

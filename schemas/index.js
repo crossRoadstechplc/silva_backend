@@ -217,6 +217,9 @@ const workPlanUpdate = z
 const farmEstateCreate = z.object({
   name: z.string().min(1),
   ownerOrganizationId: z.string().min(1).optional(),
+  approverUserId: z.string().min(1).optional(),
+  fieldManagerUserId: z.string().min(1).optional(),
+  termStartDate: z.string().optional(),
   totalAreaHa: z.number().positive().optional(),
   location: z.string().optional(),
   notes: z.string().optional(),
@@ -229,6 +232,8 @@ const farmEstateCreate = z.object({
         label: z.string().optional(),
         areaHa: z.number().optional(),
         treeCount: z.number().int().optional(),
+        varietyPlanted: z.string().optional(),
+        plantingDate: z.string().optional(),
       }),
     )
     .optional(),
@@ -237,6 +242,10 @@ const farmEstateCreate = z.object({
 const farmEstateUpdate = z.object({
   name: z.string().min(1).optional(),
   ownerOrganizationId: z.string().min(1).nullable().optional(),
+  approverUserId: z.string().min(1).nullable().optional(),
+  fieldManagerUserId: z.string().min(1).nullable().optional(),
+  termStartDate: z.string().nullable().optional(),
+  coreBundleElected: z.boolean().nullable().optional(),
   totalAreaHa: z.number().positive().nullable().optional(),
   location: z.string().optional(),
   notes: z.string().optional(),
@@ -252,6 +261,19 @@ const farmBlockCreate = z.object({
   label: z.string().optional(),
   areaHa: z.number().optional(),
   treeCount: z.number().int().optional(),
+  varietyPlanted: z.string().optional(),
+  plantingDate: z.string().optional(),
+  status: z.enum(["active", "inactive"]).optional(),
+});
+
+const farmBlockUpdate = z.object({
+  code: z.string().min(1).optional(),
+  label: z.string().optional(),
+  areaHa: z.number().nonnegative().nullable().optional(),
+  treeCount: z.number().int().nullable().optional(),
+  varietyPlanted: z.string().nullable().optional(),
+  plantingDate: z.string().nullable().optional(),
+  status: z.enum(["active", "inactive"]).optional(),
 });
 
 const workPlanReview = z.object({
@@ -471,6 +493,7 @@ module.exports = {
   farmEstateUpdate,
   farmEstateVendors,
   farmBlockCreate,
+  farmBlockUpdate,
   messageThreadCreate,
   messageReply,
   messageThreadPatch,

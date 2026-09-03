@@ -8,6 +8,7 @@ const { userJson, organizationJson, inviteJson } = require("../utils/serializers
 const { isVendorRole, VENDOR_ROLES, SYSTEM_ROLES, permissionsFor } = require("../utils/roles");
 const { parseListQuery, meta } = require("../utils/helpers");
 const programService = require("./program.service");
+const { hydrateUserContext } = require("./userContext.service");
 const authTotp = require("./auth.totp.service");
 const mail = require("./mail.service");
 
@@ -108,6 +109,7 @@ exports.login = async (email, password) => {
     };
   }
 
+  await hydrateUserContext(user);
   const tokens = await tokenBundle(user);
   const me = await exports.me({ id: user.id });
   return { ...tokens, me };
@@ -153,6 +155,7 @@ exports.refresh = async (refreshToken) => {
 };
 
 exports.me = async (user) => {
+  await hydrateUserContext(user);
   const full = await prisma.users.findUnique({
     where: { id: user.id },
     include: { organization: true, memberships: true, activeProgram: true },

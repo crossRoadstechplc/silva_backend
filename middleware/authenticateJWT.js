@@ -2,6 +2,7 @@ const jwt = require("jsonwebtoken");
 const env = require("../config/env");
 const prisma = require("../config/database");
 const AppError = require("../utils/AppError");
+const { hydrateUserContext } = require("../services/userContext.service");
 
 const PUBLIC = new Set([
   "POST /auth/login",
@@ -74,6 +75,8 @@ module.exports = async (req, res, next) => {
       return next(new AppError(401, "UNAUTHENTICATED", "Invalid or expired token"));
     }
 
+    const ctx = await hydrateUserContext(user);
+
     req.user = {
       id: user.id,
       name: user.name,
@@ -81,9 +84,9 @@ module.exports = async (req, res, next) => {
       role: user.role,
       organizationId: user.organizationId,
       organizationType: user.organization.type,
-      vendorId: user.vendorId,
+      vendorId: ctx.vendorId,
       organization: user.organization,
-      activeProgramId: user.activeProgramId || null,
+      activeProgramId: ctx.activeProgramId,
       tenantOrgId: user.organizationId,
       sessionId: decoded.sessionId || null,
     };

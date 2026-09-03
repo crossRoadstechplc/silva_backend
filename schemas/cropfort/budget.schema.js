@@ -1,11 +1,10 @@
 const { z } = require("zod");
 
-const budgetPreviewQuery = z.object({
-  planYear: z.coerce.number().int().optional(),
-  blockId: z.string().optional(),
-  budgetMonth: z.string().optional(),
+const estimateBudget = z.object({
+  operationKind: z.enum(["intervention", "project"]).optional(),
+  farmEstateId: z.string().min(1).optional(),
+  blockIds: z.array(z.string().min(1)).optional().default([]),
+  activityIds: z.array(z.string().min(1)).min(1),
 });
 
-module.exports = {
-  budgetPreviewQuery,
-};
+module.exports = { estimateBudget };

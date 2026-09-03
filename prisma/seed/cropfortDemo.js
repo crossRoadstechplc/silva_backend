@@ -1,13 +1,13 @@
 /**
  * Cropfort Waves 1–3 demo fixtures for click-path and API verification.
- * Invoked from prisma/seed.js after activity master seed.
+ * Invoked from prisma/seed.js after Cropfort Field OS catalog import.
  */
 async function seedCropfortDemo(prisma, ctx) {
   const { programId, principalId, silvaOwnerId, bagroLeadId } = ctx;
   const weekEnding = new Date("2026-08-30T00:00:00.000Z");
   const planYear = 2026;
-  const blockA = "blk_shecha_a";
-  const blockB = "blk_shecha_b";
+  const blockA = "blk_chaka_blk_001";
+  const blockB = "blk_chaka_blk_002";
 
   await prisma.spx_validation_checks.deleteMany({ where: { programId } });
   await prisma.weekly_submission_tickets.deleteMany({
@@ -16,100 +16,105 @@ async function seedCropfortDemo(prisma, ctx) {
   await prisma.weekly_submissions.deleteMany({ where: { programId } });
   await prisma.block_field_tickets.deleteMany({ where: { programId } });
   await prisma.afp_block_lines.deleteMany({ where: { programId } });
-  await prisma.rate_card_lines.deleteMany({ where: { programId } });
   await prisma.cropfort_afes.deleteMany({ where: { programId } });
 
   const now = new Date();
 
+  const actLand = await prisma.activity_master.findFirst({
+    where: { programId, code: "T1-001" },
+  });
+  const actFert = await prisma.activity_master.findFirst({
+    where: { programId, code: "T1-035" },
+  });
+  const actWeed = await prisma.activity_master.findFirst({
+    where: { programId, code: "T1-036" },
+  });
+
+  if (!actLand || !actWeed) {
+    return {
+      weekEnding: "2026-08-30",
+      counts: { skipped: true },
+    };
+  }
+
   await prisma.rate_card_lines.createMany({
     data: [
       {
-        id: "rcl_demo_prune",
+        id: "rcl_demo_draft",
         programId,
-        resourceCode: "PRUNE-01",
-        resourceName: "Primary pruning",
-        unitOfMeasure: "tree",
-        rateEtb: 150,
-        benchmarkFarmARate: 140,
-        benchmarkFarmBRate: 145,
-        status: "approved",
+        resourceCode: "MAT-DEMO-DRAFT",
+        resourceName: "Demo draft material (verification)",
+        resourceType: "material",
+        unitOfMeasure: "kg",
+        rateEtb: 120,
+        status: "draft",
         version: 1,
-        approvedAt: now,
         createdByUserId: principalId,
       },
       {
-        id: "rcl_demo_fert",
+        id: "rcl_demo_submitted",
         programId,
-        resourceCode: "FERT-01",
-        resourceName: "Fertilizer application",
-        unitOfMeasure: "ha",
-        rateEtb: 3200,
-        benchmarkFarmARate: 3000,
-        benchmarkFarmBRate: 3100,
+        resourceCode: "MAT-DEMO-SUBMIT",
+        resourceName: "Demo submitted material (Silva queue)",
+        resourceType: "material",
+        unitOfMeasure: "kg",
+        rateEtb: 150,
         status: "submitted",
         version: 1,
         submittedAt: now,
         createdByUserId: principalId,
       },
-      {
-        id: "rcl_demo_weed",
-        programId,
-        resourceCode: "WEED-01",
-        resourceName: "Weeding",
-        unitOfMeasure: "ha",
-        rateEtb: 1800,
-        benchmarkFarmARate: 1700,
-        benchmarkFarmBRate: 1750,
-        status: "draft",
-        version: 1,
-        createdByUserId: principalId,
-      },
     ],
+    skipDuplicates: true,
   });
 
   await prisma.afp_block_lines.createMany({
     data: [
       {
-        id: "abl_demo_prune_a",
+        id: "abl_demo_land_a",
         programId,
         planYear,
         blockId: blockA,
-        activityId: "act_prune",
+        activityId: actLand.id,
         electionStatus: "elected",
         sequence: 1,
-        plannedQty: 1200,
+        plannedQty: 11.5,
         status: "approved",
         version: 1,
         approvedAt: now,
         createdByUserId: principalId,
       },
       {
-        id: "abl_demo_fert_b",
+        id: "abl_demo_weed_b",
         programId,
         planYear,
         blockId: blockB,
-        activityId: "act_fert",
+        activityId: actWeed.id,
         electionStatus: "suggested",
         sequence: 2,
-        plannedQty: 8.5,
+        plannedQty: 11.5,
         status: "draft",
         version: 1,
         createdByUserId: principalId,
       },
-      {
-        id: "abl_demo_weed_sub",
-        programId,
-        planYear,
-        blockId: blockA,
-        activityId: "act_weed",
-        electionStatus: "elected",
-        sequence: 3,
-        plannedQty: 4,
-        status: "submitted",
-        version: 1,
-        submittedAt: now,
-        createdByUserId: principalId,
-      },
+      ...(actFert
+        ? [
+            {
+              id: "abl_demo_fert_sub",
+              programId,
+              planYear,
+              blockId: blockA,
+              activityId: actFert.id,
+              electionStatus: "elected",
+              sequence: 3,
+              plannedQty: 11.5,
+              status: "submitted",
+              version: 1,
+              submittedAt: now,
+              createdByUserId: principalId,
+            },
+          ]
+        : []),
     ],
   });
 
@@ -119,10 +124,10 @@ async function seedCropfortDemo(prisma, ctx) {
         id: "bft_demo_draft",
         programId,
         blockId: blockA,
-        activityId: "act_prune",
+        activityId: actLand.id,
         weekEnding,
-        plannedQty: 100,
-        actualQty: 95,
+        plannedQty: 11.5,
+        actualQty: 10,
         laborHoursActual: 24,
         materialsUsed: { twine_kg: 2 },
         status: "draft",
@@ -132,10 +137,10 @@ async function seedCropfortDemo(prisma, ctx) {
         id: "bft_demo_submitted",
         programId,
         blockId: blockA,
-        activityId: "act_prune",
+        activityId: actLand.id,
         weekEnding,
-        plannedQty: 80,
-        actualQty: 82,
+        plannedQty: 11.5,
+        actualQty: 11,
         laborHoursActual: 20,
         status: "submitted",
         submittedAt: now,
@@ -145,10 +150,10 @@ async function seedCropfortDemo(prisma, ctx) {
         id: "bft_demo_reviewed",
         programId,
         blockId: blockA,
-        activityId: "act_prune",
+        activityId: actLand.id,
         weekEnding,
-        plannedQty: 50,
-        actualQty: 48,
+        plannedQty: 11.5,
+        actualQty: 11.5,
         laborHoursActual: 12,
         status: "reviewed_approved",
         submittedAt: now,
@@ -178,11 +183,11 @@ async function seedCropfortDemo(prisma, ctx) {
       {
         id: "caf_demo_approved",
         programId,
-        title: "Block A pruning overrun",
+        title: "Block 01 land clearing overrun",
         amountEtb: 450000,
         band: "A",
         sourceType: "afp_line",
-        sourceId: "abl_demo_prune_a",
+        sourceId: "abl_demo_land_a",
         status: "approved",
         version: 1,
         approvedAt: now,
@@ -191,7 +196,7 @@ async function seedCropfortDemo(prisma, ctx) {
       {
         id: "caf_demo_submitted",
         programId,
-        title: "Fertilizer top-up — Block B",
+        title: "Fertilizer top-up — Block 02",
         amountEtb: 1850000,
         band: "B",
         sourceType: "manual",
@@ -217,11 +222,9 @@ async function seedCropfortDemo(prisma, ctx) {
   return {
     weekEnding: "2026-08-30",
     counts: {
-      rateCardApproved: 1,
-      rateCardSubmitted: 1,
-      rateCardDraft: 1,
+      rateCardApproved: 20,
       afpApprovedElected: 1,
-      afpSubmitted: 1,
+      afpSubmitted: actFert ? 1 : 0,
       ticketsDraft: 1,
       ticketsSubmitted: 1,
       weeklySubmissions: 1,

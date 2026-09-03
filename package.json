@@ -20,6 +20,11 @@
     "test:integration": "jest tests/integration --runInBand --forceExit",
     "test:invariants": "jest tests/invariants --runInBand --forceExit",
     "verify:cropfort-demo": "node scripts/verify-cropfort-demo.js",
+    "migrate:bagro-portfolio": "node scripts/migrate-bagro-portfolio.js",
+    "import:cropfort": "node scripts/import-cropfort-field-os.js",
+    "migrate:cropfort-per-farm": "node scripts/migrate-cropfort-per-farm.js",
+    "verify:cropfort-parity": "node scripts/verify-cropfort-workbook-parity.js",
+    "reset:cropfort-journey": "node scripts/reset-cropfort-farm-journey.js",
     "db:ping": "node scripts/test-db-connection.js",
     "test:smtp": "node scripts/test-smtp.js"
   },

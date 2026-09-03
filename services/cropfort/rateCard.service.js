@@ -59,6 +59,7 @@ exports.create = async (user, dto) => {
       programId,
       resourceCode: dto.resourceCode,
       resourceName: dto.resourceName,
+      resourceType: dto.resourceType ?? null,
       unitOfMeasure: dto.unitOfMeasure,
       rateEtb: dto.rateEtb,
       benchmarkFarmARate: dto.benchmarkFarmARate ?? null,
@@ -83,6 +84,7 @@ exports.update = async (user, lineId, dto) => {
     data: {
       resourceCode: dto.resourceCode ?? line.resourceCode,
       resourceName: dto.resourceName ?? line.resourceName,
+      resourceType: dto.resourceType !== undefined ? dto.resourceType : line.resourceType,
       unitOfMeasure: dto.unitOfMeasure ?? line.unitOfMeasure,
       rateEtb: dto.rateEtb ?? line.rateEtb,
       benchmarkFarmARate: dto.benchmarkFarmARate !== undefined ? dto.benchmarkFarmARate : line.benchmarkFarmARate,
@@ -130,4 +132,24 @@ exports.returnLine = async (user, lineId, comment) => {
   const updated = await approvable.returnLine("rate_card_line", lineId, user, programId, comment);
   const threshold = await getProgramThreshold(programId);
   return serializeLine(updated, threshold, false);
+};
+
+exports.reopenLine = async (user, lineId) => {
+  const programId = requireProgramId(user);
+  const line = await prisma.rate_card_lines.findFirst({
+    where: { id: lineId, programId, status: "returned" },
+  });
+  if (!line) throw new AppError(404, "NOT_FOUND", "Returned rate card line not found.");
+  const newLine = await approvable.reopenReturnedLine("rate_card_line", lineId, user, programId, {
+    programId,
+    resourceCode: line.resourceCode,
+    resourceName: line.resourceName,
+    unitOfMeasure: line.unitOfMeasure,
+    rateEtb: line.rateEtb,
+    benchmarkFarmARate: line.benchmarkFarmARate,
+    benchmarkFarmBRate: line.benchmarkFarmBRate,
+    spxJustificationNote: line.spxJustificationNote,
+  });
+  const threshold = await getProgramThreshold(programId);
+  return serializeLine(newLine, threshold, false);
 };

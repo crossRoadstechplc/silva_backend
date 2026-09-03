@@ -189,3 +189,28 @@ exports.returnLine = async (user, lineId, comment) => {
   });
   return serializeLine(line, false);
 };
+
+exports.reopenLine = async (user, lineId) => {
+  const programId = requireProgramId(user);
+  const line = await prisma.afp_block_lines.findFirst({
+    where: { id: lineId, programId, status: "returned" },
+    include: lineInclude,
+  });
+  if (!line) throw new AppError(404, "NOT_FOUND", "Returned AFP block line not found.");
+  const newLine = await approvable.reopenReturnedLine("afp_block_line", lineId, user, programId, {
+    programId,
+    planYear: line.planYear,
+    blockId: line.blockId,
+    activityId: line.activityId,
+    electionStatus: line.electionStatus,
+    sequence: line.sequence,
+    plannedStart: line.plannedStart,
+    plannedEnd: line.plannedEnd,
+    plannedQty: line.plannedQty,
+  });
+  const withIncludes = await prisma.afp_block_lines.findUnique({
+    where: { id: newLine.id },
+    include: lineInclude,
+  });
+  return serializeLine(withIncludes, false);
+};

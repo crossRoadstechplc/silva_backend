@@ -277,10 +277,44 @@ enum MessageCounterpartyType {
 
 enum CropfortRole {
   field_supervisor
+  field_manager
   bagro_office
   spx_validator
   farm_owner
+  farm_owner_viewer
   spx_platform_admin
+}
+
+enum FarmBlockStatus {
+  active
+  inactive
+}
+
+enum FarmWorkflowStageKey {
+  farm_block_setup
+  benchmark_survey
+  rate_cards_confirmed
+  fee_schedule_set
+  tier_election
+  activity_plan
+  master_plan_calendar
+  supervisor_progress
+  budgets_cash_flow
+  monthly_client_report
+}
+
+enum SupervisorPctComplete {
+  pct_0
+  pct_25
+  pct_50
+  pct_75
+  pct_100
+}
+
+enum MonthlyReportStatus {
+  draft
+  ready
+  sent
 }
 
 enum CropfortLineStatus {
@@ -510,6 +544,13 @@ model programs {
   weeklySubmissions     weekly_submissions[]
   cropfortAfes          cropfort_afes[]
   coreOperationProjects core_operation_projects[]
+  benchmarkSurveys      benchmark_surveys[]
+  laborRateCards        labor_rate_cards[]
+  cropfortElections     cropfort_elections[]
+  cropfortActivityPlans cropfort_activity_plans[]
+  feeSchedules          fee_schedules[]
+  supervisorProgress    supervisor_progress[]
+  monthlyClientReports  monthly_client_reports[]
 }
 
 model program_memberships {
@@ -599,6 +640,16 @@ model users {
   afpBlockLinesCreated  afp_block_lines[]       @relation("AfpBlockCreator")
   blockFieldTickets     block_field_tickets[]   @relation("BlockTicketSubmitter")
   cropfortAfesCreated   cropfort_afes[]         @relation("CropfortAfeCreator")
+  farmsAsApprover       farm_estates[]          @relation("FarmApprover")
+  farmsAsFieldManager   farm_estates[]          @relation("FarmFieldManager")
+  workflowStagesCompleted farm_workflow_stages[] @relation("WorkflowStageCompleter")
+  benchmarkSurveysCreated benchmark_surveys[]   @relation("BenchmarkSurveyCreator")
+  benchmarkSurveysApproved benchmark_surveys[]  @relation("BenchmarkSurveyApprover")
+  laborRateCardsCreated labor_rate_cards[]      @relation("LaborRateCardCreator")
+  cropfortElectionsCreated cropfort_elections[] @relation("CropfortElectionCreator")
+  feeSchedulesCreated   fee_schedules[]         @relation("FeeScheduleCreator")
+  monthlyReportsCreated monthly_client_reports[] @relation("MonthlyReportCreator")
+  supervisorProgressUpdates supervisor_progress[] @relation("SupervisorProgressUpdater")
 
   @@index([organizationId])
   @@index([role])
@@ -1430,20 +1481,35 @@ model farm_estates {
   totalAreaHa         Decimal?         @db.Decimal(10, 2)
   location            String?
   notes               String?
+  termStartDate       DateTime?        @db.Date
+  approverUserId      String?
+  fieldManagerUserId  String?
+  coreBundleElected   Boolean?
   status              FarmEstateStatus @default(active)
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
   program             programs                  @relation(fields: [programId], references: [id])
   ownerOrganization   organizations?            @relation("FarmEstateOwner", fields: [ownerOrganizationId], references: [id])
+  approverUser        users?                    @relation("FarmApprover", fields: [approverUserId], references: [id])
+  fieldManagerUser    users?                    @relation("FarmFieldManager", fields: [fieldManagerUserId], references: [id])
   vendorMaps          farm_estate_vendors[]
   blocks              farm_blocks[]
   workPlanSubmissions work_plan_submissions[]
   activityRequests    activity_requests[]
+  workflowStages      farm_workflow_stages[]
+  benchmarkSurveys    benchmark_surveys[]
+  laborRateCards      labor_rate_cards[]
+  rateCardLines       rate_card_lines[]
+  cropfortElections   cropfort_elections[]
+  cropfortActivityPlans cropfort_activity_plans[]
+  feeSchedules        fee_schedules[]
+  monthlyClientReports monthly_client_reports[]
 
   @@unique([programId, name])
   @@index([programId, status])
   @@index([ownerOrganizationId])
+  @@index([approverUserId])
 }
 
 model farm_estate_vendors {
@@ -1461,16 +1527,19 @@ model farm_estate_vendors {
 }
 
 model farm_blocks {
-  id                       String   @id
+  id                       String          @id
   programId                String
   farmEstateId             String?
   code                     String
   label                    String?
-  areaHa                   Decimal? @db.Decimal(10, 2)
+  areaHa                   Decimal?        @db.Decimal(10, 2)
   treeCount                Int?
+  varietyPlanted           String?
+  plantingDate             DateTime?       @db.Date
+  status                   FarmBlockStatus @default(active)
   assignedSupervisorUserId String?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  createdAt                DateTime        @default(now())
+  updatedAt                DateTime        @updatedAt
 
   program            programs      @relation(fields: [programId], references: [id])
   farmEstate         farm_estates? @relation(fields: [farmEstateId], references: [id], onDelete: SetNull)
@@ -1478,9 +1547,28 @@ model farm_blocks {
   assignments        work_order_block_assignments[]
   afpBlockLines      afp_block_lines[]
   blockFieldTickets  block_field_tickets[]
+  cropfortElections  cropfort_elections[]
+  cropfortActivityPlans cropfort_activity_plans[]
 
   @@unique([programId, farmEstateId, code])
   @@index([programId])
+  @@index([farmEstateId])
+}
+
+model farm_workflow_stages {
+  id               String               @id
+  farmEstateId     String
+  stageKey         FarmWorkflowStageKey
+  completedAt      DateTime?
+  completedByUserId String?
+  gateSnapshotJson Json?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  farmEstate  farm_estates @relation(fields: [farmEstateId], references: [id], onDelete: Cascade)
+  completedBy users?       @relation("WorkflowStageCompleter", fields: [completedByUserId], references: [id])
+
+  @@unique([farmEstateId, stageKey])
   @@index([farmEstateId])
 }
 
@@ -1522,36 +1610,53 @@ model cropfort_user_roles {
 }
 
 model activity_templates {
-  id            String   @id
-  code          String   @unique
-  name          String
-  category      String
-  tier          String   @default("standard")
-  unitOfMeasure String
-  createdAt     DateTime @default(now())
+  id               String   @id
+  code             String   @unique
+  name             String
+  category         String
+  tier             String   @default("standard")
+  unitOfMeasure    String
+  laborNorm        Decimal? @db.Decimal(14, 6)
+  materialNorm     Decimal? @db.Decimal(14, 6)
+  serviceNorm      Decimal? @db.Decimal(14, 6)
+  laborWageEtb     Decimal? @db.Decimal(14, 2)
+  laborCostPerUnit Decimal? @db.Decimal(14, 4)
+  materialRateCode String?
+  serviceRateCode  String?
+  createdAt        DateTime @default(now())
 
   activities activity_master[]
 }
 
 model activity_master {
-  id            String    @id
-  programId     String
-  templateId    String?
-  code          String
-  name          String
-  laborNorm     Decimal?  @db.Decimal(14, 4)
-  materialNorm  Decimal?  @db.Decimal(14, 4)
-  serviceNorm   Decimal?  @db.Decimal(14, 4)
-  version       Int       @default(1)
-  effectiveFrom DateTime?
-  effectiveTo   DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                 String    @id
+  programId          String
+  templateId         String?
+  code               String
+  name               String
+  laborNorm          Decimal?  @db.Decimal(14, 6)
+  materialNorm       Decimal?  @db.Decimal(14, 6)
+  serviceNorm        Decimal?  @db.Decimal(14, 6)
+  laborWageEtb       Decimal?  @db.Decimal(14, 2)
+  laborCostPerUnit   Decimal?  @db.Decimal(14, 4)
+  materialRateCode   String?
+  serviceRateCode    String?
+  benchmarkFarmARate Decimal?  @db.Decimal(14, 4)
+  benchmarkFarmBRate Decimal?  @db.Decimal(14, 4)
+  version            Int       @default(1)
+  effectiveFrom      DateTime?
+  effectiveTo        DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   program  programs            @relation(fields: [programId], references: [id])
   template activity_templates? @relation(fields: [templateId], references: [id])
   afpLines afp_block_lines[]
   tickets  block_field_tickets[]
+  benchmarkSurveys benchmark_surveys[]
+  laborRateCards   labor_rate_cards[]
+  cropfortElections cropfort_elections[]
+  cropfortActivityPlans cropfort_activity_plans[]
 
   @@unique([programId, code, version])
   @@index([programId])
@@ -1560,12 +1665,14 @@ model activity_master {
 model rate_card_lines {
   id                   String             @id
   programId            String
+  farmEstateId         String?
   resourceCode         String
   resourceName         String
+  resourceType         String?
   unitOfMeasure        String
-  rateEtb              Decimal            @db.Decimal(14, 2)
-  benchmarkFarmARate   Decimal?           @db.Decimal(14, 2)
-  benchmarkFarmBRate   Decimal?           @db.Decimal(14, 2)
+  rateEtb              Decimal            @db.Decimal(14, 4)
+  benchmarkFarmARate   Decimal?           @db.Decimal(14, 4)
+  benchmarkFarmBRate   Decimal?           @db.Decimal(14, 4)
   spxJustificationNote String?
   status               CropfortLineStatus @default(draft)
   version              Int                @default(1)
@@ -1580,12 +1687,219 @@ model rate_card_lines {
   updatedAt            DateTime           @updatedAt
 
   program    programs          @relation(fields: [programId], references: [id])
+  farmEstate farm_estates?     @relation(fields: [farmEstateId], references: [id], onDelete: Cascade)
   createdBy  users             @relation("RateCardCreator", fields: [createdByUserId], references: [id])
   supersedes rate_card_lines?  @relation("RateCardVersion", fields: [supersedesId], references: [id])
   superseded rate_card_lines[] @relation("RateCardVersion")
 
   @@index([programId, status])
   @@index([programId, resourceCode])
+  @@index([farmEstateId, status])
+}
+
+model benchmark_surveys {
+  id               String             @id
+  programId        String
+  farmEstateId     String
+  activityId       String
+  neighbor1Name    String?
+  neighbor2Name    String?
+  neighbor1Rate    Decimal?           @db.Decimal(14, 4)
+  neighbor2Rate    Decimal?           @db.Decimal(14, 4)
+  lockedAt         DateTime?
+  recommendedRate  Decimal?           @db.Decimal(14, 4)
+  proposedRate     Decimal?           @db.Decimal(14, 4)
+  useNormWage      Boolean            @default(false)
+  status           CropfortLineStatus @default(draft)
+  version          Int                @default(1)
+  supersedesId     String?
+  submittedAt      DateTime?
+  approvedAt       DateTime?
+  validUntil       DateTime?
+  approverUserId   String?
+  returnedComment  String?
+  createdByUserId  String
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  program    programs          @relation(fields: [programId], references: [id])
+  farmEstate farm_estates      @relation(fields: [farmEstateId], references: [id], onDelete: Cascade)
+  activity   activity_master   @relation(fields: [activityId], references: [id])
+  createdBy  users             @relation("BenchmarkSurveyCreator", fields: [createdByUserId], references: [id])
+  approver   users?            @relation("BenchmarkSurveyApprover", fields: [approverUserId], references: [id])
+  supersedes benchmark_surveys? @relation("BenchmarkSurveyVersion", fields: [supersedesId], references: [id])
+  superseded benchmark_surveys[] @relation("BenchmarkSurveyVersion")
+
+  @@index([farmEstateId, activityId, status])
+  @@index([programId, status])
+}
+
+model labor_rate_cards {
+  id                 String             @id
+  programId          String
+  farmEstateId       String
+  activityId         String
+  normMandayPerUnit  Decimal?           @db.Decimal(14, 6)
+  wageRatePerManday  Decimal?           @db.Decimal(14, 2)
+  status             CropfortLineStatus @default(approved)
+  version            Int                @default(1)
+  supersedesId       String?
+  createdByUserId    String
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  program    programs           @relation(fields: [programId], references: [id])
+  farmEstate farm_estates       @relation(fields: [farmEstateId], references: [id], onDelete: Cascade)
+  activity   activity_master    @relation(fields: [activityId], references: [id])
+  createdBy  users              @relation("LaborRateCardCreator", fields: [createdByUserId], references: [id])
+  supersedes labor_rate_cards?  @relation("LaborRateCardVersion", fields: [supersedesId], references: [id])
+  superseded labor_rate_cards[] @relation("LaborRateCardVersion")
+
+  @@index([farmEstateId, activityId])
+  @@index([programId])
+}
+
+model cropfort_elections {
+  id                      String                 @id
+  programId               String
+  farmEstateId            String
+  planYear                Int
+  blockId                 String?
+  activityId              String
+  electionOverride        Boolean?
+  commercialAgreementRef  String?
+  defaultWindowStart      DateTime?              @db.Date
+  defaultWindowEnd        DateTime?              @db.Date
+  plannedDurationDays     Int?
+  effectiveEndDate        DateTime?              @db.Date
+  status                  CropfortLineStatus     @default(draft)
+  version                 Int                    @default(1)
+  supersedesId            String?
+  returnedComment         String?
+  submittedAt             DateTime?
+  approvedAt              DateTime?
+  createdByUserId         String
+  createdAt               DateTime               @default(now())
+  updatedAt               DateTime               @updatedAt
+
+  program    programs            @relation(fields: [programId], references: [id])
+  farmEstate farm_estates        @relation(fields: [farmEstateId], references: [id], onDelete: Cascade)
+  block      farm_blocks?        @relation(fields: [blockId], references: [id])
+  activity   activity_master     @relation(fields: [activityId], references: [id])
+  createdBy  users               @relation("CropfortElectionCreator", fields: [createdByUserId], references: [id])
+  supersedes cropfort_elections? @relation("CropfortElectionVersion", fields: [supersedesId], references: [id])
+  superseded cropfort_elections[] @relation("CropfortElectionVersion")
+  activityPlans cropfort_activity_plans[]
+
+  @@index([farmEstateId, planYear, blockId])
+  @@index([farmEstateId, planYear, activityId])
+  @@index([programId, status])
+}
+
+model cropfort_activity_plans {
+  id                 String   @id
+  programId          String
+  farmEstateId       String
+  planYear           Int
+  blockId            String?
+  activityId         String
+  electionId         String?
+  plannedQty         Decimal? @db.Decimal(14, 4)
+  resolvedLaborRate  Decimal? @db.Decimal(14, 4)
+  plannedLaborCost   Decimal? @db.Decimal(14, 2)
+  plannedMaterialCost Decimal? @db.Decimal(14, 2)
+  plannedServiceCost Decimal? @db.Decimal(14, 2)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  program    programs             @relation(fields: [programId], references: [id])
+  farmEstate farm_estates         @relation(fields: [farmEstateId], references: [id], onDelete: Cascade)
+  block      farm_blocks?         @relation(fields: [blockId], references: [id])
+  activity   activity_master      @relation(fields: [activityId], references: [id])
+  election   cropfort_elections?  @relation(fields: [electionId], references: [id])
+  supervisorProgress supervisor_progress?
+
+  @@index([farmEstateId, planYear, blockId])
+  @@index([farmEstateId, planYear, activityId])
+}
+
+model fee_schedules {
+  id                  String             @id
+  programId           String
+  farmEstateId        String
+  confirmedAnnualFee  Decimal            @db.Decimal(14, 2)
+  status              CropfortLineStatus @default(draft)
+  version             Int                @default(1)
+  supersedesId        String?
+  submittedAt         DateTime?
+  approvedAt          DateTime?
+  returnedComment     String?
+  createdByUserId     String
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  program    programs           @relation(fields: [programId], references: [id])
+  farmEstate farm_estates       @relation(fields: [farmEstateId], references: [id], onDelete: Cascade)
+  createdBy  users              @relation("FeeScheduleCreator", fields: [createdByUserId], references: [id])
+  supersedes fee_schedules?     @relation("FeeScheduleVersion", fields: [supersedesId], references: [id])
+  superseded fee_schedules[]    @relation("FeeScheduleVersion")
+  lines      fee_schedule_lines[]
+
+  @@index([farmEstateId, status])
+}
+
+model fee_schedule_lines {
+  id              String   @id
+  feeScheduleId   String
+  label           String
+  annualFee       Decimal? @db.Decimal(14, 2)
+  activationMonth Int?
+  deferred        Boolean  @default(false)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  feeSchedule fee_schedules @relation(fields: [feeScheduleId], references: [id], onDelete: Cascade)
+
+  @@index([feeScheduleId])
+}
+
+model supervisor_progress {
+  id               String                @id
+  programId        String
+  activityPlanId   String                @unique
+  pctComplete      SupervisorPctComplete @default(pct_0)
+  lastMovementDate DateTime?             @db.Date
+  updatedByUserId  String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  program      programs                @relation(fields: [programId], references: [id])
+  activityPlan cropfort_activity_plans @relation(fields: [activityPlanId], references: [id], onDelete: Cascade)
+  updatedBy    users?                  @relation("SupervisorProgressUpdater", fields: [updatedByUserId], references: [id])
+
+  @@index([programId])
+}
+
+model monthly_client_reports {
+  id                 String              @id
+  programId          String
+  farmEstateId       String
+  reportMonth        DateTime            @db.Date
+  fieldObservations  String?
+  lookAheadNotes     String?
+  status             MonthlyReportStatus @default(draft)
+  sentAt             DateTime?
+  createdByUserId    String
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  program    programs     @relation(fields: [programId], references: [id])
+  farmEstate farm_estates @relation(fields: [farmEstateId], references: [id], onDelete: Cascade)
+  createdBy  users        @relation("MonthlyReportCreator", fields: [createdByUserId], references: [id])
+
+  @@unique([farmEstateId, reportMonth])
+  @@index([programId, status])
 }
 
 model afp_block_lines {

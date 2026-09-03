@@ -1,22 +1,10 @@
 const prisma = require("../../config/database");
 const AppError = require("../../utils/AppError");
-const { laborCost, materialCost } = require("../costDerivation.service");
+const { activityLineCosts } = require("../costDerivation.service");
+const { getApprovedRateByCode } = require("./rateMap.service");
+const cashFlowService = require("./cashFlow.service");
 const { requireProgramId } = require("../utils/programScope");
 const { isFarmOwner } = require("../../utils/cropfortRoles");
-
-async function getApprovedRateByCode(programId) {
-  const lines = await prisma.rate_card_lines.findMany({
-    where: { programId, status: "approved" },
-    orderBy: [{ resourceCode: "asc" }, { version: "desc" }],
-  });
-  const map = new Map();
-  for (const line of lines) {
-    if (!map.has(line.resourceCode)) {
-      map.set(line.resourceCode, Number(line.rateEtb));
-    }
-  }
-  return map;
-}
 
 function monthKey(date) {
   if (!date) return null;
@@ -32,6 +20,25 @@ function matchesMonth(plannedStart, budgetMonth) {
 exports.preview = async (user, query) => {
   const programId = requireProgramId(user);
   const farmOwner = await isFarmOwner(user.id, programId);
+
+  if (query.farmEstateId && query.planYear) {
+    const rollup = await cashFlowService.getBudgetRollup(user, query.farmEstateId, query.planYear);
+    return {
+      tier1ByBlock: rollup.tier1ByBlock,
+      tier23FarmWide: rollup.tier23FarmWide,
+      totals: {
+        ...rollup.totals,
+        totalCostEtb: Number(
+          (rollup.totals.labor + rollup.totals.material + rollup.totals.service).toFixed(2),
+        ),
+        laborCostEtb: rollup.totals.labor,
+        materialCostEtb: rollup.totals.material,
+        serviceCostEtb: rollup.totals.service,
+      },
+      rows: rollup.tier1ByBlock,
+    };
+  }
+
   const rateMap = await getApprovedRateByCode(programId);
 
   const where = {
@@ -45,8 +52,8 @@ exports.preview = async (user, query) => {
   const lines = await prisma.afp_block_lines.findMany({
     where,
     include: {
-      activity: true,
-      block: { select: { id: true, code: true, label: true } },
+      activity: { include: { template: true } },
+      block: { select: { id: true, code: true, label: true, areaHa: true, treeCount: true } },
     },
     orderBy: [{ blockId: "asc" }, { sequence: "asc" }],
   });
@@ -54,14 +61,15 @@ exports.preview = async (user, query) => {
   const rows = [];
   let totalLabor = 0;
   let totalMaterial = 0;
+  let totalService = 0;
 
   for (const line of lines) {
     if (!matchesMonth(line.plannedStart, query.budgetMonth)) continue;
-    const rate = rateMap.get(line.activity.code) ?? 0;
-    const labor = laborCost(line.plannedQty, line.activity.laborNorm, rate);
-    const material = materialCost(line.plannedQty, line.activity.materialNorm, rate);
-    totalLabor += labor;
-    totalMaterial += material;
+    const qty = Number(line.plannedQty);
+    const costs = activityLineCosts(qty, line.activity, rateMap);
+    totalLabor += costs.laborCostEtb;
+    totalMaterial += costs.materialCostEtb;
+    totalService += costs.serviceCostEtb;
     rows.push({
       programId,
       planYear: line.planYear,
@@ -72,31 +80,26 @@ exports.preview = async (user, query) => {
       activityCode: line.activity.code,
       activityName: line.activity.name,
       budgetMonth: monthKey(line.plannedStart),
-      plannedQty: Number(line.plannedQty),
-      rateEtb: rate,
-      laborCostEtb: Number(labor.toFixed(2)),
-      materialCostEtb: Number(material.toFixed(2)),
-      totalCostEtb: Number((labor + material).toFixed(2)),
+      plannedQty: qty,
+      laborCostEtb: costs.laborCostEtb,
+      materialCostEtb: costs.materialCostEtb,
+      serviceCostEtb: costs.serviceCostEtb,
+      totalCostEtb: costs.totalCostEtb,
     });
   }
 
+  const totals = {
+    laborCostEtb: Number(totalLabor.toFixed(2)),
+    materialCostEtb: Number(totalMaterial.toFixed(2)),
+    serviceCostEtb: Number(totalService.toFixed(2)),
+    totalCostEtb: Number((totalLabor + totalMaterial + totalService).toFixed(2)),
+  };
+
   if (farmOwner) {
-    return {
-      rows: rows.map(({ rateEtb: _rate, ...rest }) => rest),
-      totals: {
-        laborCostEtb: Number(totalLabor.toFixed(2)),
-        materialCostEtb: Number(totalMaterial.toFixed(2)),
-        totalCostEtb: Number((totalLabor + totalMaterial).toFixed(2)),
-      },
-    };
+    return { rows, totals };
   }
 
-  return {
-    rows,
-    totals: {
-      laborCostEtb: Number(totalLabor.toFixed(2)),
-      materialCostEtb: Number(totalMaterial.toFixed(2)),
-      totalCostEtb: Number((totalLabor + totalMaterial).toFixed(2)),
-    },
-  };
+  return { rows, totals };
 };
+
+exports.getApprovedRateByCode = getApprovedRateByCode;

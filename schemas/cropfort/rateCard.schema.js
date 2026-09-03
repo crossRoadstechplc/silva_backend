@@ -3,6 +3,7 @@ const { z } = require("zod");
 const createRateCardLine = z.object({
   resourceCode: z.string().min(1),
   resourceName: z.string().min(1),
+  resourceType: z.enum(["material", "service"]).optional().nullable(),
   unitOfMeasure: z.string().min(1),
   rateEtb: z.coerce.number().positive(),
   benchmarkFarmARate: z.coerce.number().positive().optional().nullable(),
