@@ -191,6 +191,105 @@ async function main() {
   }
   results.push(report("activity plans", planFailures, planSheet.length));
 
+  // Tier rollup: Tier 1 opex lands per block, Tier 2/3 stay farm-wide.
+  const cashFlowService = require("../services/cropfort/cashFlow.service");
+  const feeScheduleService = require("../services/cropfort/feeSchedule.service");
+  const scopedUser = { id: farm.approverUserId || "system", activeProgramId: farm.programId };
+
+  const rollup = await cashFlowService.getBudgetRollup(scopedUser, farmEstateId, planYear);
+  const tierFailures = [];
+
+  const sheetTier1 = planSheet.filter((p) => p.activityCode.startsWith("T1-") && p.elected);
+  const sheetLaborByBlock = new Map();
+  const sheetRowsByBlock = new Map();
+  for (const row of sheetTier1) {
+    sheetLaborByBlock.set(
+      row.blockCode,
+      (sheetLaborByBlock.get(row.blockCode) || 0) + (row.plannedLaborCost || 0),
+    );
+    sheetRowsByBlock.set(row.blockCode, (sheetRowsByBlock.get(row.blockCode) || 0) + 1);
+  }
+
+  // Line costs persist as DECIMAL(14,2), so each row can drift by up to half a
+  // cent from the sheet's full-precision figure. Allow for that accumulation;
+  // a genuine costing error would be orders of magnitude larger.
+  const blockTolerance = (blockCode) => 0.01 * (sheetRowsByBlock.get(blockCode) || 1);
+
+  if (rollup.tier1ByBlock.length !== sheetLaborByBlock.size) {
+    tierFailures.push(
+      `Tier 1 blocks: rollup=${rollup.tier1ByBlock.length} sheet=${sheetLaborByBlock.size}`,
+    );
+  }
+  for (const row of rollup.tier1ByBlock) {
+    const expected = sheetLaborByBlock.get(row.blockCode);
+    if (expected == null) {
+      tierFailures.push(`${row.blockCode}: block not in workbook plan`);
+    } else if (Math.abs(row.labor - expected) > blockTolerance(row.blockCode)) {
+      tierFailures.push(
+        `${row.blockCode} labour: rollup=${row.labor.toFixed(2)} sheet=${expected.toFixed(2)}`,
+      );
+    }
+  }
+
+  const sheetElected = parsers
+    .parseAnnualElection()
+    .elections.filter((e) => !e.blockCode && e.elected);
+  const expectedTier2 = sheetElected.filter((e) => e.activityCode.startsWith("T2-")).length;
+  const expectedTier3 = sheetElected.filter((e) => e.activityCode.startsWith("T3-")).length;
+  const farmWide = rollup.tier23FarmWide;
+  if (!farmWide) {
+    tierFailures.push("Tier 2/3 rollup missing while the workbook elects farm-wide activities");
+  } else {
+    if (farmWide.tier2Activities !== expectedTier2) {
+      tierFailures.push(
+        `Tier 2 elected: rollup=${farmWide.tier2Activities} sheet=${expectedTier2}`,
+      );
+    }
+    if (farmWide.tier3Activities !== expectedTier3) {
+      tierFailures.push(
+        `Tier 3 elected: rollup=${farmWide.tier3Activities} sheet=${expectedTier3}`,
+      );
+    }
+    // Tier 2/3 are billed through the fee schedule, never as field opex.
+    if (farmWide.total !== 0) {
+      tierFailures.push(`Tier 2/3 opex should be 0, got ${farmWide.total}`);
+    }
+  }
+  results.push(
+    report(
+      "tier rollup (Tier 1 per block, Tier 2/3 farm-wide)",
+      tierFailures,
+      rollup.tier1ByBlock.length + 3,
+    ),
+  );
+
+  // Fee schedule 36-month projection.
+  const sheetMonths = parsers.parseFeeMonthlySchedule();
+  const feeFailures = [];
+  const fee = await feeScheduleService.get(scopedUser, farmEstateId);
+  if (!fee) {
+    feeFailures.push("no fee schedule stored for this farm");
+  } else {
+    for (const sheetMonth of sheetMonths) {
+      const row = fee.monthlyRollup[sheetMonth.monthIndex - 1];
+      if (!row) {
+        feeFailures.push(`month ${sheetMonth.monthIndex}: missing from rollup`);
+        continue;
+      }
+      if (Math.abs(row.feeEtb - sheetMonth.feeEtb) > 0.02) {
+        feeFailures.push(
+          `month ${sheetMonth.monthIndex} total: system=${row.feeEtb} sheet=${sheetMonth.feeEtb}`,
+        );
+      }
+      if (Math.abs(row.cumulativeFeeEtb - sheetMonth.cumulativeFeeEtb) > 1) {
+        feeFailures.push(
+          `month ${sheetMonth.monthIndex} cumulative: system=${row.cumulativeFeeEtb} sheet=${sheetMonth.cumulativeFeeEtb}`,
+        );
+      }
+    }
+  }
+  results.push(report("fee schedule 36-month projection", feeFailures, sheetMonths.length || 1));
+
   // Rows this farm carries that the workbook does not define.
   const sheetLineCodes = new Set(sheetLines.map((l) => l.resourceCode));
   const extraLines = rateLines.filter((r) => !sheetLineCodes.has(r.resourceCode));
