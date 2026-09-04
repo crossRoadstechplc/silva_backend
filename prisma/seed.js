@@ -682,8 +682,144 @@ async function main() {
     },
   });
   await prisma.id_sequences.create({ data: { name: "inv", lastValue: 1 } });
-  await prisma.id_sequences.create({ data: { name: "pr", lastValue: 0 } });
-  await prisma.id_sequences.create({ data: { name: "stl", lastValue: 0 } });
+  await prisma.id_sequences.create({ data: { name: "pr", lastValue: 2 } });
+  await prisma.id_sequences.create({ data: { name: "stl", lastValue: 2 } });
+
+  // Validated tickets + verified PRs so draft owner settlements can exist for Silva/SPX boards
+  await prisma.field_tickets.createMany({
+    data: [
+      {
+        id: "ft_seed_stl_draft_1",
+        programId: program.id,
+        workOrderId: wo.id,
+        submittedByUserId: lead.id,
+        activityRecorded: "Pruning completion — draft settlement demo",
+        areaHa: 2.5,
+        laborCount: 12,
+        materialsUsed: "Pruning tools",
+        ticketDate: new Date("2026-08-20T00:00:00.000Z"),
+        actualQuantity: 2.5,
+        actualMandays: 12,
+        actualCostEtb: 45000,
+        signedOff: true,
+        signedOffByUserId: "usr_spx_supervisor",
+        signedOffAt: new Date("2026-08-21T00:00:00.000Z"),
+        status: "validated",
+      },
+      {
+        id: "ft_seed_stl_draft_2",
+        programId: program.id,
+        workOrderId: "WO-0002",
+        submittedByUserId: lead.id,
+        activityRecorded: "Fertilizer application — draft settlement demo",
+        areaHa: 4,
+        laborCount: 8,
+        materialsUsed: "NPK fertilizer",
+        ticketDate: new Date("2026-08-28T00:00:00.000Z"),
+        actualQuantity: 4,
+        actualMandays: 8,
+        actualCostEtb: 82000,
+        signedOff: true,
+        signedOffByUserId: "usr_spx_supervisor",
+        signedOffAt: new Date("2026-08-29T00:00:00.000Z"),
+        status: "validated",
+      },
+    ],
+  });
+  await prisma.payment_requests.createMany({
+    data: [
+      {
+        id: "PR-DRAFT-001",
+        programId: program.id,
+        workOrderId: wo.id,
+        fieldTicketId: "ft_seed_stl_draft_1",
+        requestedByUserId: lead.id,
+        type: "bagro_fee",
+        amountRequestedEtb: 45000,
+        dateSubmitted: new Date("2026-08-22T00:00:00.000Z"),
+        spxVerified: true,
+        spxVerifiedByUserId: handler.id,
+        verifiedDate: new Date("2026-08-23T00:00:00.000Z"),
+        status: "verified",
+      },
+      {
+        id: "PR-DRAFT-002",
+        programId: program.id,
+        workOrderId: "WO-0002",
+        fieldTicketId: "ft_seed_stl_draft_2",
+        requestedByUserId: lead.id,
+        type: "reimbursable_cost",
+        amountRequestedEtb: 82000,
+        dateSubmitted: new Date("2026-08-30T00:00:00.000Z"),
+        spxVerified: true,
+        spxVerifiedByUserId: handler.id,
+        verifiedDate: new Date("2026-08-31T00:00:00.000Z"),
+        status: "verified",
+      },
+    ],
+  });
+  await prisma.owner_settlements.createMany({
+    data: [
+      {
+        id: "STL-DRAFT-001",
+        programId: program.id,
+        workOrderId: wo.id,
+        paymentRequestId: "PR-DRAFT-001",
+        type: "bagro_fee",
+        payee: "B-Agro Coffee Development PLC",
+        amountEtb: 45000,
+        status: "draft",
+      },
+      {
+        id: "STL-DRAFT-002",
+        programId: program.id,
+        workOrderId: "WO-0002",
+        paymentRequestId: "PR-DRAFT-002",
+        type: "labor_wages",
+        payee: "B-Agro Coffee Development PLC",
+        amountEtb: 82000,
+        status: "draft",
+      },
+    ],
+  });
+
+  // Silva only sees released + visibleToSilva reports (drafts are SPX-only by firewall)
+  await prisma.reports.createMany({
+    data: [
+      {
+        id: "rpt_2026_08_monthly",
+        programId: program.id,
+        type: "monthly",
+        period: "2026-08",
+        status: "released",
+        visibleToSilva: true,
+        narrative:
+          "August close-out: field execution validated; draft settlements prepared for owner review once SPX authorizes.",
+        releasedAt: new Date("2026-09-01T00:00:00.000Z"),
+        releasedByUserId: handler.id,
+      },
+      {
+        id: "rpt_2026_09_monthly",
+        programId: program.id,
+        type: "monthly",
+        period: "2026-09",
+        status: "released",
+        visibleToSilva: true,
+        narrative:
+          "September peak harvest prep: pruning closed on WO-0001, fertilizer window active. Draft owner settlements awaiting SPX authorization.",
+        releasedAt: new Date("2026-09-03T00:00:00.000Z"),
+        releasedByUserId: handler.id,
+      },
+      {
+        id: "rpt_2026_q3_quarterly",
+        programId: program.id,
+        type: "quarterly",
+        period: "2026-Q3",
+        status: "draft",
+        visibleToSilva: false,
+      },
+    ],
+  });
 
   await prisma.notifications.createMany({
     data: [
