@@ -403,6 +403,29 @@ exports.actionQueues = async (user, query = {}) => {
       });
     }
 
+    const coreOpWhere = { programId, status: "submitted" };
+    if (farmEstateId) coreOpWhere.farmEstateId = farmEstateId;
+    const pendingCoreOps = await prisma.activity_requests.findMany({
+      where: coreOpWhere,
+      take: 8,
+      orderBy: { createdAt: "asc" },
+      select: { id: true, title: true, operationKind: true, plannedStartDate: true },
+    });
+    for (const req of pendingCoreOps) {
+      const kind = req.operationKind === "project" ? "project" : "intervention";
+      const start = req.plannedStartDate
+        ? ` (starts ${req.plannedStartDate.toISOString().slice(0, 10)})`
+        : "";
+      items.push({
+        type: "core_op_review",
+        entityId: req.id,
+        label: `Plan ${kind}: ${req.title}${start}`,
+        href: kind === "project" ? `/operations/projects?highlight=${req.id}` : `/operations/interventions?highlight=${req.id}`,
+        health: "watch",
+        priority: 0,
+      });
+    }
+
     const pendingAfe = await prisma.afes.findMany({
       where: { programId, status: { in: ["submitted", "validated"] }, silvaApprovalRequired: true },
       take: 8,

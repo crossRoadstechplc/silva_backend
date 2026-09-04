@@ -131,15 +131,6 @@ async function main() {
       brandingJson: { primaryColor: "#1d4ed8", tagline: "Field execution" },
     },
   });
-  const highlandOrg = await prisma.organizations.create({
-    data: {
-      id: "org_highland",
-      name: "Highland Harvest Ltd",
-      slug: "highland-harvest",
-      displayName: "Highland Harvest",
-      type: "vendor",
-    },
-  });
 
   const program = await prisma.programs.create({
     data: {
@@ -159,7 +150,6 @@ async function main() {
       { id: "pm_silva", programId: program.id, organizationId: silva.id, roleInProgram: "owner" },
       { id: "pm_spx", programId: program.id, organizationId: spx.id, roleInProgram: "manager" },
       { id: "pm_bagro", programId: program.id, organizationId: bagroOrg.id, roleInProgram: "executor" },
-      { id: "pm_highland", programId: program.id, organizationId: highlandOrg.id, roleInProgram: "viewer" },
     ],
   });
 
@@ -175,17 +165,6 @@ async function main() {
       insuranceExpiry: new Date("2026-12-31T00:00:00.000Z"),
       status: "active",
       isDefaultExecutionPartner: true,
-    },
-  });
-
-  await prisma.vendors.create({
-    data: {
-      id: "vnd_highland",
-      organizationId: highlandOrg.id,
-      name: "Highland Harvest Ltd",
-      category: "Harvest & Post-Harvest",
-      servicesProvided: "Selective picking supervision",
-      status: "pending",
     },
   });
 
@@ -216,7 +195,6 @@ async function main() {
   const lead = await user("usr_bagro_lead", "Dawit Bekele", "lead@bagro.example", "vendor_field_lead", bagroOrg.id, bagro.id);
   await user("usr_bagro_super", "B-Agro Supervisor", "supervisor@bagro.example", "vendor_supervisor", bagroOrg.id, bagro.id);
   await user("usr_bagro_worker", "B-Agro Worker", "worker@bagro.example", "vendor_worker", bagroOrg.id, bagro.id);
-  await user("usr_highland_admin", "Highland Admin", "admin@highland.example", "vendor_admin", highlandOrg.id, "vnd_highland");
 
   try {
     const { importCropfortFieldOsAndFarms } = require("../lib/cropfortFieldOsSeed");
@@ -730,16 +708,6 @@ async function main() {
         message: "Field ticket FT-0001 passed vendor review — SPX validation required.",
       },
       {
-        id: "ntf_demo_principal",
-        programId: program.id,
-        triggerType: "workplan_submitted",
-        entityType: "work_plan_submission",
-        entityId: "wps_demo",
-        recipientRole: "spx_principal",
-        recipientUserId: principal.id,
-        message: "Demo notification — workflow events (AFE, tickets, work plans, registrations) appear here.",
-      },
-      {
         id: "ntf_demo_vendor",
         programId: program.id,
         triggerType: "wo_issued",
@@ -765,6 +733,168 @@ async function main() {
     });
   } catch (e) {
     console.warn("Cropfort roles seed skipped:", e.message);
+  }
+
+  // Silva-ordered Tier 2 harvest project for September — pending SPX planning / approval / work plan
+  try {
+    const chaka = await prisma.farm_estates.findFirst({
+      where: { programId: program.id, name: { contains: "Chaka", mode: "insensitive" }, status: "active" },
+      select: { id: true },
+    });
+    const harvestActivityIds = (
+      await prisma.activity_master.findMany({
+        where: {
+          programId: program.id,
+          id: { in: ["act_t2_001", "act_t2_002", "act_t2_003", "act_t2_005", "act_t2_007"] },
+        },
+        select: { id: true },
+      })
+    ).map((a) => a.id);
+    const harvestBlocks = chaka
+      ? await prisma.farm_blocks.findMany({
+          where: { farmEstateId: chaka.id, code: { in: ["BLK-001", "BLK-002", "BLK-003", "BLK-004", "BLK-005"] } },
+          select: { id: true, code: true },
+          orderBy: { code: "asc" },
+        })
+      : [];
+
+    await prisma.activity_requests.upsert({
+      where: { id: "ahr_harvest_sep_2026" },
+      create: {
+        id: "ahr_harvest_sep_2026",
+        programId: program.id,
+        farmEstateId: chaka?.id || null,
+        requestType: "other",
+        operationKind: "project",
+        title: "September Harvest Session — Chaka Buna",
+        description:
+          "Discipline: Harvest Operations\n\nSilva-ordered Tier 2 harvest session for September peak. " +
+          "Elected Annual Harvest Management activities. Pending SPX planning, approval, and work-plan assignment to B-Agro.",
+        urgency: "normal",
+        blocksOrAreas: harvestBlocks.map((b) => b.code).join(", ") || "Chaka Buna",
+        blockIds: harvestBlocks.map((b) => b.id),
+        activityIds: harvestActivityIds,
+        plannedStartDate: new Date("2026-09-01T00:00:00.000Z"),
+        plannedEndDate: new Date("2026-10-31T00:00:00.000Z"),
+        estimatedAmountEtb: 850000,
+        status: "submitted",
+        origin: "silva_request",
+        requestedByUserId: "usr_silva_owner",
+        suggestedAfpLineId: "AFP-2026-003",
+      },
+      update: {
+        farmEstateId: chaka?.id || null,
+        title: "September Harvest Session — Chaka Buna",
+        status: "submitted",
+        operationKind: "project",
+        plannedStartDate: new Date("2026-09-01T00:00:00.000Z"),
+        plannedEndDate: new Date("2026-10-31T00:00:00.000Z"),
+        blockIds: harvestBlocks.map((b) => b.id),
+        activityIds: harvestActivityIds,
+        estimatedAmountEtb: 850000,
+        convertedAfeId: null,
+        convertedCropfortAfeId: null,
+        workPlanSubmissionId: null,
+        dismissedAt: null,
+      },
+    });
+
+    await prisma.notifications.create({
+      data: {
+        id: "ntf_harvest_sep_2026",
+        programId: program.id,
+        triggerType: "adhoc_submitted",
+        entityType: "ad_hoc_request",
+        entityId: "ahr_harvest_sep_2026",
+        recipientRole: "spx_principal",
+        recipientUserId: principal.id,
+        message:
+          "Silva ordered September Harvest Session (Chaka Buna) — plan, approve, then assign work plan.",
+      },
+    });
+    console.log("Seeded September harvest project request: ahr_harvest_sep_2026");
+
+    // Tier 3 interventions — materials + facility (replaces ad-hoc irrigation demo)
+    const materialActs = (
+      await prisma.activity_master.findMany({
+        where: { id: { in: ["act_t3_005"] } },
+        select: { id: true },
+      })
+    ).map((a) => a.id);
+    const facilityActs = (
+      await prisma.activity_master.findMany({
+        where: { id: { in: ["act_t3_002", "act_t3_016"] } },
+        select: { id: true },
+      })
+    ).map((a) => a.id);
+    const interventionBlocks = harvestBlocks.slice(0, 3);
+
+    await prisma.activity_requests.upsert({
+      where: { id: "ahr_materials_procurement" },
+      create: {
+        id: "ahr_materials_procurement",
+        programId: program.id,
+        farmEstateId: chaka?.id || null,
+        requestType: "urgent_field_work",
+        operationKind: "intervention",
+        title: "Urgent harvest materials procurement — Chaka Buna",
+        description:
+          "Discipline: Infrastructure\n\nUrgent procurement of picking bags, drying-bed materials, tarpaulins, and " +
+          "harvest tools ahead of peak season. Outside the annual plan envelope — requires SPX conversion to AFE.",
+        urgency: "high",
+        blocksOrAreas: interventionBlocks.map((b) => b.code).join(", ") || "Chaka Buna",
+        blockIds: interventionBlocks.map((b) => b.id),
+        activityIds: materialActs,
+        estimatedAmountEtb: 275000,
+        status: "submitted",
+        origin: "silva_request",
+        requestedByUserId: "usr_silva_owner",
+      },
+      update: {
+        title: "Urgent harvest materials procurement — Chaka Buna",
+        status: "submitted",
+        operationKind: "intervention",
+        activityIds: materialActs,
+        blockIds: interventionBlocks.map((b) => b.id),
+        estimatedAmountEtb: 275000,
+        farmEstateId: chaka?.id || null,
+      },
+    });
+
+    await prisma.activity_requests.upsert({
+      where: { id: "ahr_facility_build" },
+      create: {
+        id: "ahr_facility_build",
+        programId: program.id,
+        farmEstateId: chaka?.id || null,
+        requestType: "infrastructure_inspection",
+        operationKind: "intervention",
+        title: "Drying shed / storage facility build — Chaka Buna",
+        description:
+          "Discipline: Infrastructure\n\nOwner-requested drying shed and short-term cherry storage near BLK-001–003. " +
+          "Technical due diligence and feasibility required before AFE and contractor mobilisation.",
+        urgency: "normal",
+        blocksOrAreas: interventionBlocks.map((b) => b.code).join(", ") || "Chaka Buna",
+        blockIds: interventionBlocks.map((b) => b.id),
+        activityIds: facilityActs,
+        estimatedAmountEtb: 1850000,
+        status: "submitted",
+        origin: "silva_request",
+        requestedByUserId: "usr_silva_owner",
+      },
+      update: {
+        title: "Drying shed / storage facility build — Chaka Buna",
+        status: "submitted",
+        operationKind: "intervention",
+        activityIds: facilityActs,
+        blockIds: interventionBlocks.map((b) => b.id),
+        estimatedAmountEtb: 1850000,
+        farmEstateId: chaka?.id || null,
+      },
+    });
+    console.log("Seeded intervention requests: materials + facility build");
+  } catch (e) {
+    console.warn("Harvest project seed skipped:", e.message);
   }
 
   try {

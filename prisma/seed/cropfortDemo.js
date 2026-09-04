@@ -208,7 +208,7 @@ async function seedCropfortDemo(prisma, ctx) {
       {
         id: "caf_demo_draft",
         programId,
-        title: "Emergency irrigation repair",
+        title: "Drying shed facility build",
         amountEtb: 6200000,
         band: "D",
         sourceType: "intervention",
