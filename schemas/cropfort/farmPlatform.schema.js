@@ -58,6 +58,36 @@ const feeScheduleUpsert = z.object({
     .optional(),
 });
 
+const fieldWorkCalendarUpsert = z.object({
+  rows: z
+    .array(
+      z.object({
+        activityId: z.string().optional().nullable(),
+        activityCode: z.string().min(1),
+        activityName: z.string().min(1),
+        tier: z.string().min(1),
+        category: z.string().min(1),
+        commercialStatus: z.enum(["confirmed", "elective", "quoted"]).optional(),
+        annualFeeEtb: z.coerce.number().nonnegative().optional().nullable(),
+        sortOrder: z.coerce.number().int().optional(),
+        notes: z.string().optional().nullable(),
+        cells: z
+          .array(
+            z.object({
+              monthIndex: z.coerce.number().int().min(1).max(36),
+              intensity: z.enum(["peak", "active", "light"]),
+            }),
+          )
+          .optional(),
+      }),
+    )
+    .optional(),
+});
+
+const fieldWorkCalendarReturn = z.object({
+  comment: z.string().optional().nullable(),
+});
+
 const supervisorProgressUpsert = z.object({
   activityPlanId: z.string().min(1),
   pctComplete: z.enum(["pct_0", "pct_25", "pct_50", "pct_75", "pct_100"]),
@@ -79,6 +109,8 @@ module.exports = {
   electionUpsert,
   activityPlanUpsert,
   feeScheduleUpsert,
+  fieldWorkCalendarUpsert,
+  fieldWorkCalendarReturn,
   supervisorProgressUpsert,
   monthlyReportUpdate,
 };

@@ -4,6 +4,7 @@ const benchmarkSurveyService = require("../../services/cropfort/benchmarkSurvey.
 const electionsService = require("../../services/cropfort/elections.service");
 const activityPlansService = require("../../services/cropfort/activityPlans.service");
 const feeScheduleService = require("../../services/cropfort/feeSchedule.service");
+const fieldWorkCalendarService = require("../../services/cropfort/fieldWorkCalendar.service");
 const supervisorProgressService = require("../../services/cropfort/supervisorProgress.service");
 const cashFlowService = require("../../services/cropfort/cashFlow.service");
 const monthlyClientReportService = require("../../services/cropfort/monthlyClientReport.service");
@@ -141,6 +142,44 @@ exports.submitFeeSchedule = catchAsync(async (req, res) => {
 
 exports.approveFeeSchedule = catchAsync(async (req, res) => {
   const data = await feeScheduleService.approve(req.user, req.params.farmId);
+  res.json({ data });
+});
+
+exports.getFieldWorkCalendar = catchAsync(async (req, res) => {
+  const data = await fieldWorkCalendarService.get(req.user, req.params.farmId);
+  res.json({ data });
+});
+
+exports.upsertFieldWorkCalendar = catchAsync(async (req, res) => {
+  const data = await fieldWorkCalendarService.upsertDraft(
+    req.user,
+    req.params.farmId,
+    req.validatedBody,
+  );
+  res.json({ data });
+});
+
+exports.seedFieldWorkCalendar = catchAsync(async (req, res) => {
+  const data = await fieldWorkCalendarService.seedFromTemplates(req.user, req.params.farmId);
+  res.json({ data });
+});
+
+exports.submitFieldWorkCalendar = catchAsync(async (req, res) => {
+  const data = await fieldWorkCalendarService.submit(req.user, req.params.farmId);
+  res.json({ data });
+});
+
+exports.approveFieldWorkCalendar = catchAsync(async (req, res) => {
+  const data = await fieldWorkCalendarService.approve(req.user, req.params.farmId);
+  res.json({ data });
+});
+
+exports.returnFieldWorkCalendar = catchAsync(async (req, res) => {
+  const data = await fieldWorkCalendarService.returnCalendar(
+    req.user,
+    req.params.farmId,
+    req.validatedBody?.comment,
+  );
   res.json({ data });
 });
 

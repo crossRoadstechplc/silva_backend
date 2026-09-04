@@ -524,6 +524,39 @@ router.post(
 );
 
 router.get(
+  "/farms/:farmId/field-work-calendar",
+  requireCropfortRole(...ALL_CROPFORT),
+  farmPlatformController.getFieldWorkCalendar,
+);
+router.put(
+  "/farms/:farmId/field-work-calendar",
+  requireCropfortRole(...FM),
+  validate(farmPlatformSchemas.fieldWorkCalendarUpsert),
+  farmPlatformController.upsertFieldWorkCalendar,
+);
+router.post(
+  "/farms/:farmId/field-work-calendar/seed",
+  requireCropfortRole(...FM),
+  farmPlatformController.seedFieldWorkCalendar,
+);
+router.post(
+  "/farms/:farmId/field-work-calendar/submit",
+  requireCropfortRole(...FM),
+  farmPlatformController.submitFieldWorkCalendar,
+);
+router.post(
+  "/farms/:farmId/field-work-calendar/approve",
+  requireCropfortRole("farm_owner"),
+  farmPlatformController.approveFieldWorkCalendar,
+);
+router.post(
+  "/farms/:farmId/field-work-calendar/return",
+  requireCropfortRole("farm_owner"),
+  validate(farmPlatformSchemas.fieldWorkCalendarReturn),
+  farmPlatformController.returnFieldWorkCalendar,
+);
+
+router.get(
   "/farms/:farmId/supervisor-progress",
   requireCropfortRole(...ALL_CROPFORT),
   farmPlatformController.listSupervisorProgress,

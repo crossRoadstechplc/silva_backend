@@ -324,6 +324,18 @@ enum CropfortLineStatus {
   returned
 }
 
+enum FieldWorkIntensity {
+  peak
+  active
+  light
+}
+
+enum FieldWorkCommercialStatus {
+  confirmed
+  elective
+  quoted
+}
+
 enum CropfortElectionStatus {
   suggested
   elected
@@ -549,6 +561,7 @@ model programs {
   cropfortElections     cropfort_elections[]
   cropfortActivityPlans cropfort_activity_plans[]
   feeSchedules          fee_schedules[]
+  fieldWorkCalendars    field_work_calendars[]
   supervisorProgress    supervisor_progress[]
   monthlyClientReports  monthly_client_reports[]
 }
@@ -648,6 +661,7 @@ model users {
   laborRateCardsCreated labor_rate_cards[]      @relation("LaborRateCardCreator")
   cropfortElectionsCreated cropfort_elections[] @relation("CropfortElectionCreator")
   feeSchedulesCreated   fee_schedules[]         @relation("FeeScheduleCreator")
+  fieldWorkCalendarsCreated field_work_calendars[] @relation("FieldWorkCalendarCreator")
   monthlyReportsCreated monthly_client_reports[] @relation("MonthlyReportCreator")
   supervisorProgressUpdates supervisor_progress[] @relation("SupervisorProgressUpdater")
 
@@ -1507,6 +1521,7 @@ model farm_estates {
   cropfortElections   cropfort_elections[]
   cropfortActivityPlans cropfort_activity_plans[]
   feeSchedules        fee_schedules[]
+  fieldWorkCalendars  field_work_calendars[]
   monthlyClientReports monthly_client_reports[]
 
   @@unique([programId, name])
@@ -1660,6 +1675,7 @@ model activity_master {
   laborRateCards   labor_rate_cards[]
   cropfortElections cropfort_elections[]
   cropfortActivityPlans cropfort_activity_plans[]
+  fieldWorkCalendarRows field_work_calendar_rows[]
 
   @@unique([programId, code, version])
   @@index([programId])
@@ -1865,6 +1881,69 @@ model fee_schedule_lines {
   feeSchedule fee_schedules @relation(fields: [feeScheduleId], references: [id], onDelete: Cascade)
 
   @@index([feeScheduleId])
+}
+
+model field_work_calendars {
+  id              String             @id
+  programId       String
+  farmEstateId    String
+  termStartDate   DateTime?          @db.Date
+  status          CropfortLineStatus @default(draft)
+  version         Int                @default(1)
+  supersedesId    String?
+  returnedComment String?
+  submittedAt     DateTime?
+  approvedAt      DateTime?
+  createdByUserId String
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  program    programs              @relation(fields: [programId], references: [id])
+  farmEstate farm_estates          @relation(fields: [farmEstateId], references: [id], onDelete: Cascade)
+  createdBy  users                 @relation("FieldWorkCalendarCreator", fields: [createdByUserId], references: [id])
+  supersedes field_work_calendars? @relation("FieldWorkCalendarVersion", fields: [supersedesId], references: [id])
+  superseded field_work_calendars[] @relation("FieldWorkCalendarVersion")
+  rows       field_work_calendar_rows[]
+
+  @@index([farmEstateId, status])
+  @@index([programId])
+}
+
+model field_work_calendar_rows {
+  id               String                     @id
+  calendarId       String
+  activityId       String?
+  activityCode     String
+  activityName     String
+  tier             String
+  category         String
+  commercialStatus FieldWorkCommercialStatus  @default(confirmed)
+  annualFeeEtb     Decimal?                   @db.Decimal(14, 2)
+  sortOrder        Int                        @default(0)
+  notes            String?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  calendar field_work_calendars      @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  activity activity_master?          @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  cells    field_work_calendar_cells[]
+
+  @@index([calendarId])
+  @@index([activityCode])
+}
+
+model field_work_calendar_cells {
+  id         String            @id
+  rowId      String
+  monthIndex Int
+  intensity  FieldWorkIntensity
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  row field_work_calendar_rows @relation(fields: [rowId], references: [id], onDelete: Cascade)
+
+  @@unique([rowId, monthIndex])
+  @@index([rowId])
 }
 
 model supervisor_progress {
